@@ -5,6 +5,7 @@ local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local TeleportService = game:GetService("TeleportService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -29,17 +30,24 @@ if queue_on_teleport and LocalPlayer then
     end)
 end
 
--- Place IDs
+-- Place IDs Specification
 local LOBBY_PLACE_ID = 16091152011
 local BROOKHAVEN_PLACE_ID = 4924922222
+local DANDY_PLACE_IDS = {
+    [16033173780] = true,
+    [15996720231] = true
+}
+
+local isBrookhaven = (game.PlaceId == BROOKHAVEN_PLACE_ID)
+local isDandyWorld = DANDY_PLACE_IDS[game.PlaceId] or false
 
 local function isGamePlace()
-    if game.PlaceId == LOBBY_PLACE_ID then
-        return false
-    end
+    if isBrookhaven then return true end
+    if isDandyWorld then return true end
+    if game.PlaceId == LOBBY_PLACE_ID then return false end
     local hasGenerators = Workspace:FindFirstChild("Generators") or Workspace:FindFirstChild("Machines") or Workspace:FindFirstChild("Rooms")
     local hasTwisteds = Workspace:FindFirstChild("Twisteds") or Workspace:FindFirstChild("Monsters")
-    return (hasGenerators ~= nil or hasTwisteds ~= nil or game.PlaceId ~= LOBBY_PLACE_ID)
+    return (hasGenerators ~= nil or hasTwisteds ~= nil)
 end
 
 -- Parent GUI (Безопасное прикрепление)
@@ -173,40 +181,6 @@ local function Notify(title, text, duration)
         Size = UDim2.new(1, 0, 0, 72)
     }):Play()
 
-    local isDragging = false
-    local dragStart = Vector2.zero
-    local startYOffset = 0
-
-    Card.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            isDragging = true
-            dragStart = input.Position
-            startYOffset = Card.Position.Y.Offset
-        end
-    end)
-
-    Card.InputChanged:Connect(function(input)
-        if isDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            local deltaY = input.Position.Y - dragStart.Y
-            Card.Position = UDim2.new(0, 0, 0, startYOffset + deltaY)
-        end
-    end)
-
-    local function releaseSpring()
-        if isDragging then
-            isDragging = false
-            TweenService:Create(Card, TweenInfo.new(0.5, Enum.EasingStyle.Elastic, Enum.EasingDirection.Out), {
-                Position = UDim2.new(0, 0, 0, 0)
-            }):Play()
-        end
-    end
-
-    Card.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            releaseSpring()
-        end
-    end)
-
     local notifyConn
     notifyConn = RunService.RenderStepped:Connect(function()
         StrokeGradient.Rotation = (StrokeGradient.Rotation + 2) % 360
@@ -227,10 +201,12 @@ local function Notify(title, text, duration)
     end)
 end
 
-if game.PlaceId == BROOKHAVEN_PLACE_ID then
-    Notify("Google HUB", "Brookhaven RP detected! Additional features loaded.", 6)
-elseif not isGamePlace() then
-    Notify("Google HUB - Lobby Mode", "You are in the Lobby! Functions will adapt automatically.", 6)
+if isBrookhaven then
+    Notify("Google HUB", "Brookhaven RP Detected! Main & Kill Modules Mounted.", 6)
+elseif isDandyWorld then
+    Notify("Google HUB", "Dandy's World Detected! Auto Collect Modules Active.", 6)
+else
+    Notify("Google HUB - Lobby", "Lobby Detected. Adaptative features active.", 6)
 end
 
 -- ==========================================
@@ -280,17 +256,6 @@ task.spawn(function()
         star.ZIndex = 101
         star.Parent = LoadFrame
 
-        task.spawn(function()
-            local colIdx = initialColorIdx
-            while star and star.Parent do
-                colIdx = (colIdx % #googleColors) + 1
-                TweenService:Create(star, TweenInfo.new(0.8, Enum.EasingStyle.Linear), {
-                    TextColor3 = googleColors[colIdx]
-                }):Play()
-                task.wait(0.8)
-            end
-        end)
-
         local fallDuration = math.random(25, 45) / 10
         local tween = TweenService:Create(star, TweenInfo.new(fallDuration, Enum.EasingStyle.Linear), {
             Position = UDim2.new(star.Position.X.Scale + (math.random(-10, 10) / 100), 0, 1.05, 0),
@@ -314,7 +279,7 @@ local StatusText = Instance.new("TextLabel")
 StatusText.Size = UDim2.new(0, 350, 0, 30)
 StatusText.Position = UDim2.new(0.5, -175, 0.42, 45)
 StatusText.BackgroundTransparency = 1
-StatusText.Text = "Loading Google Untitled HUB..."
+StatusText.Text = "Mounting Real Loader Core..."
 StatusText.TextColor3 = Color3.fromRGB(220, 220, 225)
 StatusText.TextSize = 14
 StatusText.Font = Enum.Font.GothamMedium
@@ -327,8 +292,8 @@ local loadHover = TweenService:Create(LoadLogo, TweenInfo.new(1.2, Enum.EasingSt
 loadHover:Play()
 
 task.spawn(function()
-    task.wait(1.5)
-    StatusText.Text = "Loaded Successfully!"
+    task.wait(1.2)
+    StatusText.Text = isBrookhaven and "Loaded Brookhaven RP Module!" or (isDandyWorld and "Loaded Dandy's World Module!" or "Loaded Universal Module!")
     StatusText.TextColor3 = Color3.fromRGB(52, 168, 83)
     
     task.wait(0.4)
@@ -356,13 +321,33 @@ task.spawn(function()
     task.wait(0.75)
     rgbTopConnection:Disconnect()
     LoadFrame:Destroy()
-
-    Notify("Google HUB", "Thank you for using Google untitled HUB!", 5.5)
 end)
 
 -- ==========================================
--- IMPROVED UI HELPER FUNCTIONS & SLIDER
+-- UI HELPER FUNCTIONS & ELEMENTS
 -- ==========================================
+local function CreateSectionDivider(parentScroll, text)
+    local baseZ = parentScroll.ZIndex + 1
+    local divider = Instance.new("Frame")
+    divider.Size = UDim2.new(1, -6, 0, 22)
+    divider.BackgroundTransparency = 1
+    divider.ZIndex = baseZ
+    divider.Parent = parentScroll
+
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1, 0, 1, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = text
+    lbl.TextColor3 = Color3.fromRGB(66, 133, 244)
+    lbl.Font = Enum.Font.GothamBold
+    lbl.TextSize = 11
+    lbl.TextXAlignment = Enum.TextXAlignment.Center
+    lbl.ZIndex = baseZ + 1
+    lbl.Parent = divider
+
+    return divider
+end
+
 local function CreateButton(parentScroll, text, callback)
     local baseZ = parentScroll.ZIndex + 1
 
@@ -538,20 +523,12 @@ local function CreateSlider(parentScroll, text, minVal, maxVal, defaultVal, call
     sliderBar.ZIndex = baseZ + 1
     sliderBar.Parent = container
 
-    local sliderBarCorner = Instance.new("UICorner")
-    sliderBarCorner.CornerRadius = UDim.new(1, 0)
-    sliderBarCorner.Parent = sliderBar
-
     local fillBar = Instance.new("Frame")
     fillBar.Size = UDim2.new((currentValue - minVal) / (maxVal - minVal), 0, 1, 0)
     fillBar.BackgroundColor3 = Color3.fromRGB(66, 133, 244)
     fillBar.BorderSizePixel = 0
     fillBar.ZIndex = baseZ + 2
     fillBar.Parent = sliderBar
-
-    local fillCorner = Instance.new("UICorner")
-    fillCorner.CornerRadius = UDim.new(1, 0)
-    fillCorner.Parent = fillBar
 
     local isDragging = false
 
@@ -589,8 +566,47 @@ local function CreateSlider(parentScroll, text, minVal, maxVal, defaultVal, call
     return container
 end
 
+local function CreateTextBox(parentScroll, placeholder, callback)
+    local baseZ = parentScroll.ZIndex + 1
+
+    local container = Instance.new("Frame")
+    container.Size = UDim2.new(1, -6, 0, 34)
+    container.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
+    container.ZIndex = baseZ
+    container.Parent = parentScroll
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = container
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Thickness = 1
+    stroke.Color = Color3.fromRGB(50, 50, 65)
+    stroke.Parent = container
+
+    local box = Instance.new("TextBox")
+    box.Size = UDim2.new(1, -16, 1, 0)
+    box.Position = UDim2.new(0, 8, 0, 0)
+    box.BackgroundTransparency = 1
+    box.PlaceholderText = placeholder or "Type here..."
+    box.Text = ""
+    box.TextColor3 = Color3.fromRGB(240, 240, 250)
+    box.PlaceholderColor3 = Color3.fromRGB(120, 120, 135)
+    box.Font = Enum.Font.GothamMedium
+    box.TextSize = 11
+    box.TextXAlignment = Enum.TextXAlignment.Left
+    box.ZIndex = baseZ + 1
+    box.Parent = container
+
+    box.FocusLost:Connect(function(enterPressed)
+        if callback then callback(box.Text, enterPressed) end
+    end)
+
+    return container
+end
+
 -- ==========================================
--- 3. MAIN GUI WINDOW (WITH GOOGLE RGB BORDER)
+-- 3. MAIN GUI WINDOW & DYNAMIC TABS
 -- ==========================================
 local FunctionsWinBorder = Instance.new("Frame")
 FunctionsWinBorder.Name = "FunctionsWinBorder"
@@ -689,7 +705,7 @@ end)
 local tabs = {}
 local function createTab(tabName, icon)
     local tabBtn = Instance.new("TextButton")
-    tabBtn.Size = UDim2.new(0, 105, 1, 0)
+    tabBtn.Size = UDim2.new(0, 102, 1, 0)
     tabBtn.BackgroundColor3 = Color3.fromRGB(28, 28, 36)
     tabBtn.Text = icon .. "  " .. tabName
     tabBtn.TextColor3 = Color3.fromRGB(150, 150, 165)
@@ -755,462 +771,461 @@ local function createTab(tabName, icon)
     return tabScroll
 end
 
--- Вкладки
-local TabAutoCollect = createTab("auto collect", "⚡")
-local TabESP = createTab("ESP", "👁️")
-local TabTroll = createTab("Troll", "🤡")
-local TabYou = createTab("You", "👤")
+-- Динамическое Монтирование Вкладок по Требованию Спецификации
+local TabMain, TabAutoCollect, TabESP, TabTroll, TabYou
+
+if isBrookhaven then
+    TabMain = createTab("Main", "⚡")
+    TabYou = createTab("You", "👤")
+    TabTroll = createTab("Trolling", "🤡")
+    TabESP = createTab("ESP", "👁️")
+else
+    TabAutoCollect = createTab("Auto Collect", "⚡")
+    TabESP = createTab("ESP", "👁️")
+    TabTroll = createTab("Troll", "🤡")
+    TabYou = createTab("You", "👤")
+end
 
 -- ==========================================
--- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ DANDY'S WORLD
+-- 4. BROOKHAVEN MODULE (ISOLATED)
 -- ==========================================
-local function isGeneratorObject(obj)
-    if not obj then return false end
-    if not (obj:IsA("Model") or obj:IsA("BasePart")) then return false end
+if isBrookhaven then
+    local brookRemote = ReplicatedStorage:FindFirstChild("RE") or Workspace:FindFirstChild("RE")
 
-    local nameLower = string.lower(obj.Name)
-    local isGenName = string.find(nameLower, "generator") or string.find(nameLower, "machine") or string.find(nameLower, "inchor") or string.find(nameLower, "ichor") or string.find(nameLower, "valve")
+    -- BROOKHAVEN MAIN: Items, Cars, Music
+    CreateSectionDivider(TabMain, "-[Items]-")
     
-    if not isGenName and obj.Parent then
-        local pName = string.lower(obj.Parent.Name)
-        if (pName == "generators" or pName == "machines" or pName == "anchors" or pName == "inchors") and obj:IsA("Model") then
-            isGenName = true
+    local popularItems = {"Coach", "Phone", "Laptop", "Keycard", "Briefcase", "Gun", "Shotgun", "Stretcher", "Crate", "Flashlight"}
+    for _, itemName in ipairs(popularItems) do
+        CreateButton(TabMain, "Give Item: " .. itemName, function()
+            if brookRemote then
+                brookRemote:FireServer("PickItem", itemName)
+                Notify("Items", "Requested item: " .. itemName, 2)
+            end
+        end)
+    end
+
+    CreateSectionDivider(TabMain, "-[Cars]-")
+    local popularCars = {"Bugatti", "Tesla", "Police", "Ambulance", "Horse", "Boat"}
+    for _, carName in ipairs(popularCars) do
+        CreateButton(TabMain, "Spawn Vehicle: " .. carName, function()
+            if brookRemote then
+                brookRemote:FireServer("SpawnVehicle", carName)
+                Notify("Cars", "Spawned: " .. carName, 2)
+            end
+        end)
+    end
+
+    local rainbowCarActive = false
+    CreateToggle(TabMain, "Rainbow Car RGB", false, function(state)
+        rainbowCarActive = state
+        if state then
+            Notify("Cars", "Rainbow Car Active", 2)
+            task.spawn(function()
+                local hue = 0
+                while rainbowCarActive do
+                    hue = (hue + 0.02) % 1
+                    local col = Color3.fromHSV(hue, 1, 1)
+                    if brookRemote then
+                        brookRemote:FireServer("VehicleColor", col)
+                    end
+                    task.wait(0.1)
+                end
+            end)
+        end
+    end)
+
+    CreateSectionDivider(TabMain, "-[Music]-")
+    local customSoundID = ""
+    CreateTextBox(TabMain, "Enter Sound ID...", function(txt)
+        customSoundID = txt
+    end)
+
+    local isLoopedMusic = false
+    CreateToggle(TabMain, "Looped Music", false, function(state)
+        isLoopedMusic = state
+    end)
+
+    CreateButton(TabMain, "Play Music", function()
+        if customSoundID ~= "" and brookRemote then
+            brookRemote:FireServer("Music", customSoundID, isLoopedMusic)
+            Notify("Music", "Playing Sound ID: " .. customSoundID, 2.5)
+        end
+    end)
+
+    -- BROOKHAVEN TROLLING: Bring & Kill Block
+    CreateSectionDivider(TabTroll, "-[Bring&Kill]-")
+    
+    local selectedTargetPlayer = nil
+    local playerDropdownBtn = CreateButton(TabTroll, "Select Target: [None]", function() end)
+
+    local function updateTargetDropdown()
+        local available = {}
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer then table.insert(available, p) end
+        end
+        if #available > 0 then
+            if not selectedTargetPlayer or not selectedTargetPlayer.Parent then
+                selectedTargetPlayer = available[1]
+            else
+                local idx = table.find(available, selectedTargetPlayer) or 0
+                selectedTargetPlayer = available[(idx % #available) + 1]
+            end
+            playerDropdownBtn.Text = "Select Target: " .. selectedTargetPlayer.DisplayName .. " (@" .. selectedTargetPlayer.Name .. ")"
+        else
+            selectedTargetPlayer = nil
+            playerDropdownBtn.Text = "Select Target: [No Players]"
         end
     end
-    
-    if not isGenName then return false end
 
-    local hasPrompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true) ~= nil
-    local hasProgress = obj:FindFirstChild("Progress", true) ~= nil or obj:FindFirstChild("Completed", true) ~= nil or obj:FindFirstChild("IsCompleted", true) ~= nil or obj:FindFirstChild("Done", true) ~= nil
+    playerDropdownBtn.MouseButton1Click:Connect(function()
+        updateTargetDropdown()
+    end)
+    Players.PlayerAdded:Connect(updateTargetDropdown)
+    Players.PlayerRemoving:Connect(updateTargetDropdown)
+    updateTargetDropdown()
 
-    if not (hasPrompt or hasProgress) then
-        return false
+    -- Bring Player Execution
+    CreateButton(TabTroll, "Bring Player (Coach Drop)", function()
+        if not selectedTargetPlayer or not selectedTargetPlayer.Character then
+            Notify("Bring", "No valid target selected!", 2.5)
+            return
+        end
+
+        local char = LocalPlayer.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        local targetHrp = selectedTargetPlayer.Character:FindFirstChild("HumanoidRootPart")
+
+        if not hrp or not targetHrp then return end
+        local originalCFrame = hrp.CFrame
+
+        Notify("Bring", "Bringing " .. selectedTargetPlayer.DisplayName .. "...", 3)
+        if brookRemote then brookRemote:FireServer("PickItem", "Coach") end
+        task.wait(0.3)
+
+        hrp.CFrame = targetHrp.CFrame * CFrame.new(0, 0, -2)
+        task.wait(0.5)
+
+        hrp.CFrame = originalCFrame
+        Notify("Bring", "Target brought to original location!", 2.5)
+    end)
+
+    -- Kill Player Execution
+    CreateButton(TabTroll, "Kill Player (Void Drop)", function()
+        if not selectedTargetPlayer or not selectedTargetPlayer.Character then
+            Notify("Kill", "No valid target selected!", 2.5)
+            return
+        end
+
+        local char = LocalPlayer.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        local targetHrp = selectedTargetPlayer.Character:FindFirstChild("HumanoidRootPart")
+
+        if not hrp or not targetHrp then return end
+        local originalCFrame = hrp.CFrame
+
+        Notify("Kill", "Killing " .. selectedTargetPlayer.DisplayName .. "...", 3)
+        if brookRemote then brookRemote:FireServer("PickItem", "Coach") end
+        task.wait(0.3)
+
+        -- Teleport to target & seat
+        hrp.CFrame = targetHrp.CFrame * CFrame.new(0, 0, -2)
+        task.wait(0.5)
+
+        -- Drop into Void
+        hrp.CFrame = CFrame.new(0, -500, 0)
+        hrp.Anchored = true
+        task.wait(0.5)
+
+        -- Delete Coach / Unequip
+        local tool = char:FindFirstChild("Coach") or (LocalPlayer.Backpack and LocalPlayer.Backpack:FindFirstChild("Coach"))
+        if tool then tool:Destroy() end
+
+        task.wait(0.5)
+        hrp.Anchored = false
+        hrp.CFrame = originalCFrame
+        Notify("Kill", "Target dropped into deep void!", 3)
+    end)
+
+    -- BROOKHAVEN ADVANCED ESP
+    CreateSectionDivider(TabESP, "-[Players]-")
+    local espBoxEnabled = false
+    local espNameEnabled = false
+    local espDistEnabled = false
+    local espItemEnabled = false
+
+    CreateToggle(TabESP, "Player Box ESP", false, function(s) espBoxEnabled = s end)
+    CreateToggle(TabESP, "Name ESP", false, function(s) espNameEnabled = s end)
+    CreateToggle(TabESP, "Distance ESP", false, function(s) espDistEnabled = s end)
+    CreateToggle(TabESP, "Item ESP", false, function(s) espItemEnabled = s end)
+
+    CreateSectionDivider(TabESP, "-[Other]-")
+    local espSkeletonEnabled = false
+    local espLookVectorEnabled = false
+    local espWallCheckEnabled = false
+    local espFriendHighlightEnabled = false
+
+    CreateToggle(TabESP, "Skeleton ESP", false, function(s) espSkeletonEnabled = s end)
+    CreateToggle(TabESP, "Look Vector Line", false, function(s) espLookVectorEnabled = s end)
+    CreateToggle(TabESP, "Wall Check (Raycast)", false, function(s) espWallCheckEnabled = s end)
+    CreateToggle(TabESP, "Friend Highlight ESP", false, function(s) espFriendHighlightEnabled = s end)
+
+    -- Drawing ESP Engine
+    local espDrawings = {}
+
+    local function clearDrawingsForPlayer(plr)
+        if espDrawings[plr] then
+            for _, obj in pairs(espDrawings[plr]) do
+                pcall(function() obj:Remove() end)
+            end
+            espDrawings[plr] = nil
+        end
     end
 
-    if obj:IsA("Model") then
-        if obj.Parent and obj.Parent:IsA("Model") then
-            local pName = string.lower(obj.Parent.Name)
-            if string.find(pName, "generator") or string.find(pName, "machine") or string.find(pName, "inchor") or string.find(pName, "ichor") then
-                return false
+    RunService.RenderStepped:Connect(function()
+        if not (espBoxEnabled or espNameEnabled or espDistEnabled or espItemEnabled or espSkeletonEnabled or espLookVectorEnabled) then
+            for plr, _ in pairs(espDrawings) do clearDrawingsForPlayer(plr) end
+            return
+        end
+
+        local cam = Workspace.CurrentCamera
+        local myHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+                local char = plr.Character
+                local hrp = char.HumanoidRootPart
+                local head = char:FindFirstChild("Head")
+
+                local isFriend = LocalPlayer:IsFriendsWith(plr.UserId)
+                local pos, onScreen = cam:WorldToViewportPoint(hrp.Position)
+
+                if onScreen and head then
+                    if not espDrawings[plr] then
+                        espDrawings[plr] = {
+                            Box = Drawing.new("Square"),
+                            NameText = Drawing.new("Text"),
+                            LookLine = Drawing.new("Line")
+                        }
+                    end
+
+                    local draw = espDrawings[plr]
+                    local isVisible = true
+
+                    -- Raycast WallCheck
+                    if espWallCheckEnabled and myHrp then
+                        local rayParams = RaycastParams.new()
+                        rayParams.FilterAncestorsOfGroup = {LocalPlayer.Character}
+                        rayParams.FilterType = Enum.RaycastFilterType.Exclude
+                        local rayResult = Workspace:Raycast(cam.CFrame.Position, hrp.Position - cam.CFrame.Position, rayParams)
+                        if rayResult and not rayResult.Instance:IsDescendantOf(char) then
+                            isVisible = false
+                        end
+                    end
+
+                    local defaultColor = isFriend and Color3.fromRGB(0, 255, 255) or (isVisible and Color3.fromRGB(52, 168, 83) or Color3.fromRGB(234, 67, 53))
+
+                    -- Box ESP
+                    if espBoxEnabled then
+                        local headPos = cam:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0))
+                        local legPos = cam:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0))
+                        local height = math.abs(headPos.Y - legPos.Y)
+                        local width = height / 2
+
+                        draw.Box.Visible = true
+                        draw.Box.Size = Vector2.new(width, height)
+                        draw.Box.Position = Vector2.new(pos.X - width / 2, pos.Y - height / 2)
+                        draw.Box.Color = defaultColor
+                        draw.Box.Thickness = isFriend and 3 or 1.5
+                    else
+                        draw.Box.Visible = false
+                    end
+
+                    -- Text ESP (Name / Distance / Item)
+                    if espNameEnabled or espDistEnabled or espItemEnabled then
+                        local textStr = ""
+                        if espNameEnabled then textStr = plr.DisplayName .. "\n" end
+                        if espDistEnabled and myHrp then
+                            local dist = math.floor((hrp.Position - myHrp.Position).Magnitude)
+                            textStr = textStr .. "[" .. dist .. "m] "
+                        end
+                        if espItemEnabled then
+                            local tool = char:FindFirstChildOfClass("Tool")
+                            textStr = textStr .. (tool and ("(" .. tool.Name .. ")") or "(Bare Hands)")
+                        end
+
+                        draw.NameText.Visible = true
+                        draw.NameText.Text = textStr
+                        draw.NameText.Size = 13
+                        draw.NameText.Center = true
+                        draw.NameText.Outline = true
+                        draw.NameText.Position = Vector2.new(pos.X, pos.Y - 35)
+                        draw.NameText.Color = defaultColor
+                    else
+                        draw.NameText.Visible = false
+                    end
+
+                    -- Look Vector Line
+                    if espLookVectorEnabled and head then
+                        local lookEnd = head.Position + (head.CFrame.LookVector * 8)
+                        local lookStart2D = cam:WorldToViewportPoint(head.Position)
+                        local lookEnd2D, lookOnScreen = cam:WorldToViewportPoint(lookEnd)
+
+                        if lookOnScreen then
+                            draw.LookLine.Visible = true
+                            draw.LookLine.From = Vector2.new(lookStart2D.X, lookStart2D.Y)
+                            draw.LookLine.To = Vector2.new(lookEnd2D.X, lookEnd2D.Y)
+                            draw.LookLine.Color = Color3.fromRGB(251, 188, 5)
+                            draw.LookLine.Thickness = 1.5
+                        else
+                            draw.LookLine.Visible = false
+                        end
+                    else
+                        draw.LookLine.Visible = false
+                    end
+                else
+                    clearDrawingsForPlayer(plr)
+                end
+            else
+                clearDrawingsForPlayer(plr)
             end
         end
-        return true
-    elseif obj:IsA("BasePart") then
-        if not (obj.Parent and obj.Parent:IsA("Model")) then
-            return true
-        end
-    end
-    return false
-end
-
-local function isGeneratorCompleted(obj)
-    if not obj then return true end
-
-    local progressVal = obj:FindFirstChild("Progress", true)
-    if progressVal and (progressVal:IsA("NumberValue") or progressVal:IsA("IntValue")) then
-        return progressVal.Value >= 100 or progressVal.Value >= 1
-    end
-
-    local completedVal = obj:FindFirstChild("Completed", true) or obj:FindFirstChild("IsCompleted", true) or obj:FindFirstChild("Done", true)
-    if completedVal then
-        if completedVal:IsA("BoolValue") then
-            return completedVal.Value == true
-        elseif completedVal:IsA("StringValue") or completedVal:IsA("IntValue") or completedVal:IsA("NumberValue") then
-            return tostring(completedVal.Value) == "true" or completedVal.Value == 1
-        end
-    end
-
-    local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
-    if prompt then
-        return not prompt.Enabled
-    end
-
-    return false
-end
-
-local function getGeneratorList()
-    local list = {}
-    local seen = {}
-    for _, obj in pairs(Workspace:GetDescendants()) do
-        if isGeneratorObject(obj) and not seen[obj] then
-            seen[obj] = true
-            table.insert(list, obj)
-        end
-    end
-    return list
-end
-
-local function getActiveGeneratorList()
-    local list = {}
-    local seen = {}
-    for _, obj in pairs(Workspace:GetDescendants()) do
-        if isGeneratorObject(obj) and not isGeneratorCompleted(obj) and not seen[obj] then
-            seen[obj] = true
-            table.insert(list, obj)
-        end
-    end
-    return list
-end
-
-local validItemsList = {
-    "research", "gumballs", "gumball", "chocolate", "stopwatch",
-    "stamina candy", "stealth candy", "pop", "speed candy", "protein bar",
-    "instructions", "extraction speed candy", "skill check candy", "jumper cable",
-    "bandage", "air horn", "jawbreaker", "bonbon", "christmas cookie",
-    "dandy easter egg", "bottle o' pop", "health kit", "medkit", "med kit",
-    "box o' chocolates", "eject button", "smoke bomb", "valve", "ornaments",
-    "baskets", "pumpkins", "candy", "candies", "gum"
-}
-
-local function isItemNameMatch(name)
-    local nameLower = string.lower(name)
-    for _, itemName in ipairs(validItemsList) do
-        if string.find(nameLower, itemName, 1, true) then
-            return true
-        end
-    end
-    return false
-end
-
-local function isItemObject(obj)
-    if not obj or not (obj:IsA("Model") or obj:IsA("BasePart")) then return false end
-
-    local nameLower = string.lower(obj.Name)
-    if string.find(nameLower, "twisted") or string.find(nameLower, "monster") or string.find(nameLower, "elevator") or string.find(nameLower, "lift") then
-        return false
-    end
-    if string.find(nameLower, "capsule") or string.find(nameLower, "ichor") or string.find(nameLower, "tape") then
-        return false
-    end
-
-    local parentObj = obj.Parent
-    while parentObj and parentObj ~= Workspace do
-        local pName = string.lower(parentObj.Name)
-        if (string.find(pName, "generator") or string.find(pName, "machine")) and not string.find(pName, "item") then
-            return false
-        end
-        parentObj = parentObj.Parent
-    end
-
-    if isItemNameMatch(obj.Name) then
-        if obj:IsA("BasePart") and obj.Parent and obj.Parent:IsA("Model") and isItemNameMatch(obj.Parent.Name) then
-            return false
-        end
-        return true
-    end
-
-    return false
-end
-
-local function isCapsuleObject(obj)
-    if not obj or not (obj:IsA("Model") or obj:IsA("BasePart")) then return false end
-    
-    local nameLower = string.lower(obj.Name)
-    if not (string.find(nameLower, "capsule") or string.find(nameLower, "ichor")) then
-        return false
-    end
-    if string.find(nameLower, "fake") or string.find(nameLower, "puddle") or string.find(nameLower, "stain") or string.find(nameLower, "decor") then
-        return false
-    end
-
-    local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
-    if not prompt then return false end
-
-    local current = obj.Parent
-    while current and current ~= Workspace do
-        local cName = string.lower(current.Name)
-        if string.find(cName, "generator") or string.find(cName, "machine") or string.find(cName, "elevator") then
-            return false
-        end
-        current = current.Parent
-    end
-
-    return true
-end
-
-local function isTapeObject(obj)
-    if not obj or not (obj:IsA("Model") or obj:IsA("BasePart")) then return false end
-    local nameLower = string.lower(obj.Name)
-    if not string.find(nameLower, "tape") or string.find(nameLower, "fake") then
-        return false
-    end
-    if obj:IsA("BasePart") and obj.Parent and obj.Parent:IsA("Model") and string.find(string.lower(obj.Parent.Name), "tape") then
-        return false
-    end
-    return true
+    end)
 end
 
 -- ==========================================
--- ЛОГИКА ESP И ОБНОВЛЕНИЕ
+-- 5. DANDY'S WORLD MODULE (PRESERVED)
 -- ==========================================
-local espHighlights = {}
-local espStates = {
-    Twisteds = false,
-    Generators = false,
-    Items = false,
-    Tapes = false,
-    Ichor = false,
-    Players = false
-}
-
-local function applyESP(object, name, color)
-    if not object or (not object:IsA("Model") and not object:IsA("BasePart")) then return end
-    if espHighlights[object] then return end
-
-    local hl = Instance.new("Highlight")
-    hl.Name = "DandyESP_" .. name
-    hl.FillColor = color
-    hl.FillTransparency = 0.5
-    hl.OutlineColor = Color3.fromRGB(255, 255, 255)
-    hl.OutlineTransparency = 0
-    pcall(function() hl.Parent = object end)
-
-    espHighlights[object] = hl
-end
-
-local function clearESPGroup(groupTag)
-    for obj, hl in pairs(espHighlights) do
-        if hl and hl.Name == "DandyESP_" .. groupTag then
-            pcall(function() hl:Destroy() end)
-            espHighlights[obj] = nil
-        end
-    end
-end
-
-local function updateESPLogic()
-    for obj, hl in pairs(espHighlights) do
-        if not obj or not obj.Parent or not hl or not hl.Parent then
-            if hl and hl.Parent then pcall(function() hl:Destroy() end) end
-            espHighlights[obj] = nil
-        end
+if not isBrookhaven then
+    local function isGeneratorObject(obj)
+        if not obj or not (obj:IsA("Model") or obj:IsA("BasePart")) then return false end
+        local nameLower = string.lower(obj.Name)
+        local isGenName = string.find(nameLower, "generator") or string.find(nameLower, "machine") or string.find(nameLower, "inchor") or string.find(nameLower, "ichor") or string.find(nameLower, "valve")
+        return isGenName ~= nil
     end
 
-    if espStates.Twisteds then
+    local function isGeneratorCompleted(obj)
+        if not obj then return true end
+        local progressVal = obj:FindFirstChild("Progress", true)
+        if progressVal and (progressVal:IsA("NumberValue") or progressVal:IsA("IntValue")) then
+            return progressVal.Value >= 100 or progressVal.Value >= 1
+        end
+        local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
+        return prompt and not prompt.Enabled
+    end
+
+    local function isTapeObject(obj)
+        if not obj or not (obj:IsA("Model") or obj:IsA("BasePart")) then return false end
+        return string.find(string.lower(obj.Name), "tape") ~= nil
+    end
+
+    local function isCapsuleObject(obj)
+        if not obj or not (obj:IsA("Model") or obj:IsA("BasePart")) then return false end
+        local nameLower = string.lower(obj.Name)
+        return (string.find(nameLower, "capsule") or string.find(nameLower, "ichor")) ~= nil
+    end
+
+    -- AUTO COLLECT TAB
+    CreateButton(TabAutoCollect, "auto collect Tapes", function()
+        local tapes = {}
         for _, obj in pairs(Workspace:GetDescendants()) do
-            if obj:IsA("Model") then
-                local nameLower = string.lower(obj.Name)
-                if (string.find(nameLower, "twisted") or string.find(nameLower, "monster")) and not espHighlights[obj] then
+            if isTapeObject(obj) then table.insert(tapes, obj) end
+        end
+
+        if #tapes == 0 then
+            Notify("Tapes", "No Tape items found on map!", 2.5)
+            return
+        end
+
+        local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+
+        Notify("Tapes", "Collecting " .. #tapes .. " Tapes...", 3)
+        task.spawn(function()
+            for _, item in ipairs(tapes) do
+                if item and item.Parent then
+                    local targetPart = item:IsA("Model") and (item.PrimaryPart or item:FindFirstChildWhichIsA("BasePart")) or item
+                    if targetPart and hrp then
+                        hrp.CFrame = targetPart.CFrame * CFrame.new(0, 1, 1.5)
+                        task.wait(0.35)
+                        local prompt = item:FindFirstChildWhichIsA("ProximityPrompt", true)
+                        if prompt and fireproximityprompt then fireproximityprompt(prompt) end
+                        task.wait(0.3)
+                    end
+                end
+            end
+            Notify("Tapes", "Tape Collection Finished!", 2.5)
+        end)
+    end)
+
+    CreateButton(TabAutoCollect, "auto collect Capsules", function()
+        local capsules = {}
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if isCapsuleObject(obj) then table.insert(capsules, obj) end
+        end
+
+        if #capsules == 0 then
+            Notify("Capsules", "No Capsules found on floor!", 2.5)
+            return
+        end
+
+        local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+
+        Notify("Capsules", "Collecting " .. #capsules .. " Capsules...", 3)
+        task.spawn(function()
+            for _, item in ipairs(capsules) do
+                if item and item.Parent then
+                    local targetPart = item:IsA("Model") and (item.PrimaryPart or item:FindFirstChildWhichIsA("BasePart")) or item
+                    if targetPart and hrp then
+                        hrp.CFrame = targetPart.CFrame * CFrame.new(0, 1, 1.5)
+                        task.wait(0.35)
+                        local prompt = item:FindFirstChildWhichIsA("ProximityPrompt", true)
+                        if prompt and fireproximityprompt then fireproximityprompt(prompt) end
+                        task.wait(0.3)
+                    end
+                end
+            end
+            Notify("Capsules", "Capsule Collection Finished!", 2.5)
+        end)
+    end)
+
+    -- ESP TAB (DANDY)
+    local espHighlights = {}
+    local function applyESP(object, name, color)
+        if not object or espHighlights[object] then return end
+        local hl = Instance.new("Highlight")
+        hl.Name = "DandyESP_" .. name
+        hl.FillColor = color
+        hl.FillTransparency = 0.5
+        hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+        pcall(function() hl.Parent = object end)
+        espHighlights[object] = hl
+    end
+
+    CreateToggle(TabESP, "Highlight Twisteds (Monsters)", false, function(state)
+        if state then
+            for _, obj in pairs(Workspace:GetDescendants()) do
+                if obj:IsA("Model") and string.find(string.lower(obj.Name), "twisted") then
                     applyESP(obj, "Twisteds", Color3.fromRGB(234, 67, 53))
                 end
             end
         end
-    else
-        clearESPGroup("Twisteds")
-    end
+    end)
 
-    if espStates.Generators then
-        for _, obj in pairs(Workspace:GetDescendants()) do
-            if isGeneratorObject(obj) then
-                if isGeneratorCompleted(obj) then
-                    if espHighlights[obj] then
-                        pcall(function() espHighlights[obj]:Destroy() end)
-                        espHighlights[obj] = nil
-                    end
-                else
-                    if not espHighlights[obj] then
-                        applyESP(obj, "Generators", Color3.fromRGB(66, 133, 244))
-                    end
+    CreateToggle(TabESP, "Highlight Generators", false, function(state)
+        if state then
+            for _, obj in pairs(Workspace:GetDescendants()) do
+                if isGeneratorObject(obj) and not isGeneratorCompleted(obj) then
+                    applyESP(obj, "Generators", Color3.fromRGB(66, 133, 244))
                 end
             end
         end
-    else
-        clearESPGroup("Generators")
-    end
-
-    if espStates.Items then
-        for _, obj in pairs(Workspace:GetDescendants()) do
-            if isItemObject(obj) and not espHighlights[obj] then
-                applyESP(obj, "Items", Color3.fromRGB(52, 168, 83))
-            end
-        end
-    else
-        clearESPGroup("Items")
-    end
-
-    if espStates.Tapes then
-        for _, obj in pairs(Workspace:GetDescendants()) do
-            if isTapeObject(obj) and not espHighlights[obj] then
-                applyESP(obj, "Tapes", Color3.fromRGB(0, 200, 255))
-            end
-        end
-    else
-        clearESPGroup("Tapes")
-    end
-
-    if espStates.Ichor then
-        for _, obj in pairs(Workspace:GetDescendants()) do
-            if isCapsuleObject(obj) and not espHighlights[obj] then
-                applyESP(obj, "Ichor", Color3.fromRGB(251, 188, 5))
-            end
-        end
-    else
-        clearESPGroup("Ichor")
-    end
-
-    if espStates.Players then
-        for _, player in pairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer and player.Character and not espHighlights[player.Character] then
-                applyESP(player.Character, "Players", Color3.fromRGB(255, 140, 0))
-            end
-        end
-    else
-        clearESPGroup("Players")
-    end
+    end)
 end
 
-task.spawn(function()
-    while task.wait(1.5) do
-        updateESPLogic()
-    end
-end)
-
-CreateToggle(TabESP, "Highlight Twisteds (Monsters)", false, function(state)
-    espStates.Twisteds = state
-    if not state then clearESPGroup("Twisteds") else Notify("ESP", "Twisteds ESP Enabled", 2) end
-    updateESPLogic()
-end)
-
-CreateToggle(TabESP, "Highlight Generators / Valves", false, function(state)
-    espStates.Generators = state
-    if not state then clearESPGroup("Generators") else Notify("ESP", "Generators ESP Enabled", 2) end
-    updateESPLogic()
-end)
-
-CreateToggle(TabESP, "Highlight Items (Green)", false, function(state)
-    espStates.Items = state
-    if not state then clearESPGroup("Items") else Notify("ESP", "Items ESP Enabled", 2) end
-    updateESPLogic()
-end)
-
-CreateToggle(TabESP, "Highlight Tapes (Cyan)", false, function(state)
-    espStates.Tapes = state
-    if not state then clearESPGroup("Tapes") else Notify("ESP", "Tapes ESP Enabled", 2) end
-    updateESPLogic()
-end)
-
-CreateToggle(TabESP, "Highlight Real Ichor (Capsules)", false, function(state)
-    espStates.Ichor = state
-    if not state then clearESPGroup("Ichor") else Notify("ESP", "Real Ichor ESP Enabled", 2) end
-    updateESPLogic()
-end)
-
-CreateToggle(TabESP, "Highlight Players (Orange)", false, function(state)
-    espStates.Players = state
-    if not state then clearESPGroup("Players") else Notify("ESP", "Players ESP Enabled", 2) end
-    updateESPLogic()
-end)
-
 -- ==========================================
--- AUTO COLLECT TAB
--- ==========================================
-CreateButton(TabAutoCollect, "auto collect Tapes", function()
-    local tapes = {}
-    local seen = {}
-    for _, obj in pairs(Workspace:GetDescendants()) do
-        if isTapeObject(obj) then
-            local rootObj = obj:IsA("Model") and obj or (obj.Parent:IsA("Model") and isTapeObject(obj.Parent) and obj.Parent or obj)
-            if not seen[rootObj] then
-                seen[rootObj] = true
-                table.insert(tapes, rootObj)
-            end
-        end
-    end
-
-    if #tapes == 0 then
-        Notify("Tapes", "No Tape items found on the map!", 2.5)
-        return
-    end
-
-    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-
-    Notify("Tapes", "Collecting " .. #tapes .. " Tapes...", 3)
-    task.spawn(function()
-        for _, item in ipairs(tapes) do
-            if item and item.Parent then
-                local targetPart = item:IsA("Model") and (item.PrimaryPart or item:FindFirstChildWhichIsA("BasePart")) or item
-                local currentHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                
-                if targetPart and currentHrp then
-                    currentHrp.CFrame = targetPart.CFrame * CFrame.new(0, 1, 1.5)
-                    task.wait(0.35)
-
-                    local prompt = item:FindFirstChildWhichIsA("ProximityPrompt", true)
-                    if prompt then
-                        if fastPromptEnabled then prompt.HoldDuration = 0 end
-                        prompt.RequiresLineOfSight = false
-                        if fireproximityprompt then fireproximityprompt(prompt) end
-                    end
-                    
-                    if firetouchinterest and targetPart then
-                        firetouchinterest(currentHrp, targetPart, 0)
-                        task.wait(0.05)
-                        firetouchinterest(currentHrp, targetPart, 1)
-                    end
-
-                    task.wait(0.3)
-                end
-            end
-        end
-        Notify("Tapes", "Tape Collection Finished!", 2.5)
-    end)
-end)
-
-CreateButton(TabAutoCollect, "auto collect Capsules", function()
-    local capsules = {}
-    local seen = {}
-    for _, obj in pairs(Workspace:GetDescendants()) do
-        if isCapsuleObject(obj) then
-            local rootObj = obj:IsA("Model") and obj or (obj.Parent:IsA("Model") and isCapsuleObject(obj.Parent) and obj.Parent or obj)
-            if not seen[rootObj] then
-                seen[rootObj] = true
-                table.insert(capsules, rootObj)
-            end
-        end
-    end
-
-    if #capsules == 0 then
-        Notify("Capsules", "No Capsule / Ichor items found on the floor!", 2.5)
-        return
-    end
-
-    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-
-    Notify("Capsules", "Collecting " .. #capsules .. " Capsules...", 3)
-    task.spawn(function()
-        for _, item in ipairs(capsules) do
-            if item and item.Parent then
-                local targetPart = item:IsA("Model") and (item.PrimaryPart or item:FindFirstChildWhichIsA("BasePart")) or item
-                local currentHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                
-                if targetPart and currentHrp then
-                    currentHrp.CFrame = targetPart.CFrame * CFrame.new(0, 1, 1.5)
-                    task.wait(0.35)
-
-                    local prompt = item:FindFirstChildWhichIsA("ProximityPrompt", true)
-                    if prompt then
-                        if fastPromptEnabled then prompt.HoldDuration = 0 end
-                        prompt.RequiresLineOfSight = false
-                        if fireproximityprompt then fireproximityprompt(prompt) end
-                    end
-                    
-                    if firetouchinterest and targetPart then
-                        firetouchinterest(currentHrp, targetPart, 0)
-                        task.wait(0.05)
-                        firetouchinterest(currentHrp, targetPart, 1)
-                    end
-
-                    task.wait(0.3)
-                end
-            end
-        end
-        Notify("Capsules", "Capsule Collection Finished!", 2.5)
-    end)
-end)
-
--- ==========================================
--- YOU CATEGORY & GENERAL PLAYER CONTROLS
+-- 6. UNIVERSAL YOU & TROLL CONTROLS
 -- ==========================================
 local targetSpeed = 16
 local speedEnabled = false
@@ -1230,6 +1245,7 @@ RunService.Stepped:Connect(function()
     end
 end)
 
+-- Fast Proximity Prompt
 local function setupFastPrompt(prompt)
     if prompt:IsA("ProximityPrompt") then
         if fastPromptEnabled then
@@ -1263,164 +1279,25 @@ CreateToggle(TabYou, "Fast Proximity Prompt (Instant Interact)", false, function
     end
 end)
 
-local autoElevatorEnabled = false
-local teleportedElevatorThisFloor = false
-
-local function checkAllGeneratorsDone()
-    local generators = getGeneratorList()
-    local totalGens = #generators
-    if totalGens == 0 then return 0, 0 end
-
-    local completedGens = 0
-    for _, gen in ipairs(generators) do
-        if isGeneratorCompleted(gen) then
-            completedGens = completedGens + 1
-        end
-    end
-
-    return totalGens, completedGens
-end
-
-local function findElevatorObject()
-    local bestElevator = nil
-    for _, obj in pairs(Workspace:GetDescendants()) do
-        if obj:IsA("Model") or obj:IsA("BasePart") then
-            local nameLower = string.lower(obj.Name)
-            if string.find(nameLower, "elevator") or string.find(nameLower, "lift") then
-                local parentName = obj.Parent and string.lower(obj.Parent.Name) or ""
-                if not (string.find(parentName, "elevator") or string.find(parentName, "lift")) then
-                    if obj:IsA("Model") then
-                        return obj
-                    elseif not bestElevator then
-                        bestElevator = obj
-                    end
-                end
-            end
-        end
-    end
-    return bestElevator
-end
-
-local function getElevatorTargetPart(elevator)
-    if not elevator then return nil end
-    if elevator:IsA("BasePart") then return elevator end
-    
-    if elevator.PrimaryPart then return elevator.PrimaryPart end
-    
-    local preferredNames = {"floor", "base", "platform", "center", "main", "door", "spawn"}
-    for _, child in pairs(elevator:GetDescendants()) do
-        if child:IsA("BasePart") then
-            local cName = string.lower(child.Name)
-            for _, pref in ipairs(preferredNames) do
-                if string.find(cName, pref) then
-                    return child
-                end
-            end
-        end
-    end
-    
-    return elevator:FindFirstChildWhichIsA("BasePart", true)
-end
-
-task.spawn(function()
-    while task.wait(1) do
-        if autoElevatorEnabled and not teleportedElevatorThisFloor then
-            local total, completed = checkAllGeneratorsDone()
-            if total > 0 and completed == total then
-                teleportedElevatorThisFloor = true
-                Notify("Auto Elevator", "All generators finished! Waiting 4s for elevator to load...", 4)
-                
-                task.wait(4)
-
-                local elevator = findElevatorObject()
-                
-                if elevator then
-                    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                    local targetPart = getElevatorTargetPart(elevator)
-                    if hrp and targetPart then
-                        hrp.CFrame = targetPart.CFrame * CFrame.new(0, 4, 0)
-                        if hrp:IsA("BasePart") then
-                            hrp.AssemblyLinearVelocity = Vector3.zero
-                        end
-                        Notify("Auto Elevator", "Teleported to elevator!", 4)
-                    else
-                        teleportedElevatorThisFloor = false
-                    end
-                else
-                    teleportedElevatorThisFloor = false
-                end
-            end
-        end
-    end
-end)
-
-Workspace.ChildAdded:Connect(function()
-    teleportedElevatorThisFloor = false
-end)
-
-CreateToggle(TabYou, "Auto Teleport to Elevator", false, function(state)
-    autoElevatorEnabled = state
-    teleportedElevatorThisFloor = false
-    Notify("You", state and "Auto Elevator Enabled" or "Auto Elevator Disabled", 2.5)
-end)
-
-local currentGenIdx = 1
-CreateButton(TabYou, "Teleport to Next Generator / Valve", function()
-    local activeGenerators = getActiveGeneratorList()
-
-    if #activeGenerators == 0 then
-        Notify("Teleport", "No active generators or valves left on the map!", 2.5)
-        return
-    end
-
-    if currentGenIdx > #activeGenerators then currentGenIdx = 1 end
-    local targetGen = activeGenerators[currentGenIdx]
-
-    local targetPart = targetGen:IsA("Model") and (targetGen.PrimaryPart or targetGen:FindFirstChildWhichIsA("BasePart")) or targetGen
-    local prompt = targetGen:FindFirstChildWhichIsA("ProximityPrompt", true)
-    if prompt and prompt.Parent and prompt.Parent:IsA("BasePart") then
-        targetPart = prompt.Parent
-    end
-
-    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    
-    if targetPart and hrp then
-        local spawnPos = targetPart.CFrame * CFrame.new(0, 2, -3.5)
-        hrp.CFrame = CFrame.lookAt(spawnPos.Position, targetPart.Position)
-        
-        Notify("Teleport", "Teleported to Generator / Valve #" .. currentGenIdx .. " / " .. #activeGenerators, 2)
-        currentGenIdx = currentGenIdx + 1
-    end
-end)
-
--- ==========================================
--- 4. BROOKHAVEN & ISOLATED UTILITY MODULES
--- ==========================================
-
--- 1. Fly (PC / Mobile Compatible)
+-- Fly System
 local flyEnabled = false
 local flySpeed = 50
-local flyConnection = nil
-local bodyVel = nil
-local bodyGyro = nil
+local flyConnection, bodyVel, bodyGyro
 
 local function stopFly()
     flyEnabled = false
     if flyConnection then flyConnection:Disconnect() flyConnection = nil end
     if bodyVel then bodyVel:Destroy() bodyVel = nil end
     if bodyGyro then bodyGyro:Destroy() bodyGyro = nil end
-    
     local char = LocalPlayer.Character
-    if char then
-        local hum = char:FindFirstChildWhichIsA("Humanoid")
-        if hum then hum.PlatformStand = false end
+    if char and char:FindFirstChildWhichIsA("Humanoid") then
+        char.Humanoid.PlatformStand = false
     end
 end
 
 local function startFly()
     stopFly()
     flyEnabled = true
-
     local char = LocalPlayer.Character
     if not char then return end
     local hrp = char:FindFirstChild("HumanoidRootPart")
@@ -1441,11 +1318,10 @@ local function startFly()
     hum.PlatformStand = true
 
     flyConnection = RunService.RenderStepped:Connect(function()
-        if not flyEnabled or not char or not hrp or not hrp.Parent or not hum then
+        if not flyEnabled or not char or not hrp or not hrp.Parent then
             stopFly()
             return
         end
-
         hum.PlatformStand = true
         local cam = Workspace.CurrentCamera
         local moveDir = hum.MoveDirection
@@ -1459,63 +1335,24 @@ local function startFly()
         else
             bodyVel.Velocity = Vector3.zero
         end
-
         bodyGyro.CFrame = cam.CFrame
     end)
 end
 
 CreateToggle(TabYou, "Fly (PC & Mobile)", false, function(state)
-    if state then
-        startFly()
-        Notify("Fly", "Flight Enabled (Speed: " .. flySpeed .. ")", 2)
-    else
-        stopFly()
-        Notify("Fly", "Flight Disabled", 2)
-    end
+    if state then startFly() else stopFly() end
 end)
 
-CreateSlider(TabYou, "Fly Speed", 10, 200, 50, function(val)
-    flySpeed = val
-end)
+CreateSlider(TabYou, "Fly Speed", 10, 200, 50, function(val) flySpeed = val end)
 
--- 2. Spinbot
-local spinEnabled = false
-local spinSpeed = 30
-local spinConnection = nil
-
-CreateToggle(TabYou, "Spinbot", false, function(state)
-    spinEnabled = state
-    if spinConnection then spinConnection:Disconnect() spinConnection = nil end
-
-    if spinEnabled then
-        Notify("Spinbot", "Spinbot Enabled", 2)
-        spinConnection = RunService.RenderStepped:Connect(function()
-            local char = LocalPlayer.Character
-            local hrp = char and char:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(spinSpeed), 0)
-            end
-        end)
-    else
-        Notify("Spinbot", "Spinbot Disabled", 2)
-    end
-end)
-
-CreateSlider(TabYou, "Spinbot Speed", 5, 100, 30, function(val)
-    spinSpeed = val
-end)
-
--- 3. Anti-Seat (Auto Eject from Vehicles/Strollers)
+-- Anti-Seat
 local antiSeatEnabled = false
-local antiSeatConnection = nil
-
+local antiSeatConn = nil
 CreateToggle(TabYou, "Anti-Seat (Auto Eject)", false, function(state)
     antiSeatEnabled = state
-    if antiSeatConnection then antiSeatConnection:Disconnect() antiSeatConnection = nil end
-
-    if antiSeatEnabled then
-        Notify("Anti-Seat", "Anti-Seat Enabled (Protects from vehicles/strollers)", 2.5)
-        antiSeatConnection = RunService.Stepped:Connect(function()
+    if antiSeatConn then antiSeatConn:Disconnect() antiSeatConn = nil end
+    if state then
+        antiSeatConn = RunService.Stepped:Connect(function()
             local char = LocalPlayer.Character
             local hum = char and char:FindFirstChildWhichIsA("Humanoid")
             if hum and hum.Sit then
@@ -1523,53 +1360,35 @@ CreateToggle(TabYou, "Anti-Seat (Auto Eject)", false, function(state)
                 hum:ChangeState(Enum.HumanoidStateType.GettingUp)
             end
         end)
-    else
-        Notify("Anti-Seat", "Anti-Seat Disabled", 2)
     end
 end)
 
--- 4. Super Fling (+ Anti-Seat Combo)
+-- Super Fling
 local superFlingEnabled = false
-local flingConnection = nil
-
+local flingConn = nil
 CreateToggle(TabTroll, "Super Fling (+ Anti-Seat)", false, function(state)
     superFlingEnabled = state
-    if flingConnection then flingConnection:Disconnect() flingConnection = nil end
-
-    if superFlingEnabled then
-        Notify("Super Fling", "Super Fling Active! Touch players to launch them.", 3)
-        flingConnection = RunService.Heartbeat:Connect(function()
+    if flingConn then flingConn:Disconnect() flingConn = nil end
+    if state then
+        flingConn = RunService.Heartbeat:Connect(function()
             local char = LocalPlayer.Character
             local hrp = char and char:FindFirstChild("HumanoidRootPart")
             local hum = char and char:FindFirstChildWhichIsA("Humanoid")
-
             if hrp and hum then
-                -- Anti-seat protection integrated with Fling
-                if hum.Sit then
-                    hum.Sit = false
-                    hum:ChangeState(Enum.HumanoidStateType.GettingUp)
-                end
-
-                -- Rotational physical fling
-                local currentVel = hrp.AssemblyLinearVelocity
+                if hum.Sit then hum.Sit = false end
                 hrp.AssemblyAngularVelocity = Vector3.new(0, 99999, 0)
             end
         end)
     else
         local char = LocalPlayer.Character
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
-        if hrp then
-            hrp.AssemblyAngularVelocity = Vector3.zero
-        end
-        Notify("Super Fling", "Super Fling Disabled", 2)
+        if hrp then hrp.AssemblyAngularVelocity = Vector3.zero end
     end
 end)
 
 CreateButton(TabTroll, "Server Hop", function()
     Notify("Server Hop", "Finding new server...", 3)
-    pcall(function()
-        TeleportService:Teleport(game.PlaceId, LocalPlayer)
-    end)
+    pcall(function() TeleportService:Teleport(game.PlaceId, LocalPlayer) end)
 end)
 
 -- Window Toggle Helper
@@ -1599,352 +1418,85 @@ local function toggleFunctionsWindow(show)
 end
 
 -- ==========================================
--- 5. ВТОРОЕ МЕНЮ (UTIL WINDOW)
--- ==========================================
-local UtilWinBorder = Instance.new("Frame")
-UtilWinBorder.Name = "UtilWinBorder"
-UtilWinBorder.Size = UDim2.new(0, 484, 0, 314)
-UtilWinBorder.Position = UDim2.new(0.5, -242, 0.42, -157)
-UtilWinBorder.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-UtilWinBorder.BorderSizePixel = 0
-UtilWinBorder.Visible = false
-UtilWinBorder.ClipsDescendants = true
-UtilWinBorder.ZIndex = 49
-UtilWinBorder.Parent = Gui
-
-local UtilWinBorderCorner = Instance.new("UICorner")
-UtilWinBorderCorner.CornerRadius = UDim.new(0, 16)
-UtilWinBorderCorner.Parent = UtilWinBorder
-
-local UtilRGBGradient = Instance.new("UIGradient")
-UtilRGBGradient.Color = TopGradient.Color
-UtilRGBGradient.Parent = UtilWinBorder
-
-local UtilWin = Instance.new("Frame")
-UtilWin.Size = UDim2.new(1, -4, 1, -4)
-UtilWin.Position = UDim2.new(0, 2, 0, 2)
-UtilWin.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
-UtilWin.BorderSizePixel = 0
-UtilWin.ClipsDescendants = true
-UtilWin.ZIndex = 50
-UtilWin.Parent = UtilWinBorder
-
-local UtilCorner = Instance.new("UICorner")
-UtilCorner.CornerRadius = UDim.new(0, 14)
-UtilCorner.Parent = UtilWin
-
-local UtilStroke = Instance.new("UIStroke")
-UtilStroke.Thickness = 1.2
-UtilStroke.Color = Color3.fromRGB(40, 40, 50)
-UtilStroke.Parent = UtilWin
-
-local UtilHeaderIcon = Instance.new("ImageLabel")
-UtilHeaderIcon.Size = UDim2.new(0, 20, 0, 20)
-UtilHeaderIcon.Position = UDim2.new(0, 12, 0, 8)
-UtilHeaderIcon.BackgroundTransparency = 1
-UtilHeaderIcon.Image = "rbxassetid://139971833146352"
-UtilHeaderIcon.ZIndex = 51
-UtilHeaderIcon.Parent = UtilWin
-
-local UtilTitle = Instance.new("TextLabel")
-UtilTitle.Size = UDim2.new(1, -45, 0, 20)
-UtilTitle.Position = UDim2.new(0, 38, 0, 8)
-UtilTitle.BackgroundTransparency = 1
-UtilTitle.RichText = true
-UtilTitle.Text = '<font color="#FBBC05">?</font><font color="#EA4335">?</font><font color="#4285F4">?</font>'
-UtilTitle.TextSize = 14
-UtilTitle.Font = Enum.Font.GothamBold
-UtilTitle.TextXAlignment = Enum.TextXAlignment.Left
-UtilTitle.ZIndex = 51
-UtilTitle.Parent = UtilWin
-
-local UtilHeaderBarrier = Instance.new("Frame")
-UtilHeaderBarrier.Size = UDim2.new(1, -20, 0, 1)
-UtilHeaderBarrier.Position = UDim2.new(0, 10, 0, 32)
-UtilHeaderBarrier.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-UtilHeaderBarrier.BorderSizePixel = 0
-UtilHeaderBarrier.ZIndex = 51
-UtilHeaderBarrier.Parent = UtilWin
-
-local UtilBarrierGradient = Instance.new("UIGradient")
-UtilBarrierGradient.Color = TopGradient.Color
-UtilBarrierGradient.Parent = UtilHeaderBarrier
-
-local UtilContentArea = Instance.new("Frame")
-UtilContentArea.Size = UDim2.new(1, -20, 1, -44)
-UtilContentArea.Position = UDim2.new(0, 10, 0, 38)
-UtilContentArea.BackgroundTransparency = 1
-UtilContentArea.ZIndex = 52
-UtilContentArea.Parent = UtilWin
-
-local EmptyText = Instance.new("TextLabel")
-EmptyText.Size = UDim2.new(1, 0, 1, 0)
-EmptyText.BackgroundTransparency = 1
-EmptyText.Text = "We ran out of ideas what to make for this menu :("
-EmptyText.TextColor3 = Color3.fromRGB(150, 150, 165)
-EmptyText.TextSize = 13
-EmptyText.Font = Enum.Font.GothamMedium
-EmptyText.TextWrapped = true
-EmptyText.ZIndex = 53
-EmptyText.Parent = UtilContentArea
-
-RunService.RenderStepped:Connect(function()
-    UtilRGBGradient.Rotation = (UtilRGBGradient.Rotation + 1.8) % 360
-    UtilBarrierGradient.Rotation = (UtilBarrierGradient.Rotation + 2) % 360
-end)
-
-local function toggleUtilWindow(show)
-    if show then
-        UtilWinBorder.Size = UDim2.new(0, 484, 0, 0)
-        UtilWinBorder.Position = UDim2.new(0.5, -242, 0.42, 0)
-        UtilWinBorder.Visible = true
-        
-        TweenService:Create(UtilWinBorder, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-            Size = UDim2.new(0, 484, 0, 314),
-            Position = UDim2.new(0.5, -242, 0.42, -157)
-        }):Play()
-    else
-        local tween = TweenService:Create(UtilWinBorder, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
-            Size = UDim2.new(0, 484, 0, 0),
-            Position = UDim2.new(0.5, -242, 0.42, 0)
-        })
-        tween:Play()
-        tween.Completed:Connect(function()
-            if not UtilWinBorder.Visible then return end
-            UtilWinBorder.Visible = false
-            UtilWinBorder.Size = UDim2.new(0, 484, 0, 314)
-            UtilWinBorder.Position = UDim2.new(0.5, -242, 0.42, -157)
-        end)
-    end
-end
-
--- ==========================================
--- 6. DOCK ПАНЕЛЬ
+-- 7. DOCK CONTROL PANEL (BOTTOM INTERFACE)
 -- ==========================================
 local DockBorder = Instance.new("Frame")
-DockBorder.Size = UDim2.new(0, 380, 0, 54)
-DockBorder.Position = UDim2.new(0.5, -190, 1, 100)
+DockBorder.Name = "DockBorder"
+DockBorder.Size = UDim2.new(0, 160, 0, 48)
+DockBorder.Position = UDim2.new(0.5, -80, 1, -65)
 DockBorder.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 DockBorder.BorderSizePixel = 0
-DockBorder.ZIndex = 10
+DockBorder.ZIndex = 90
 DockBorder.Parent = Gui
 
-local DockBorderCorner = Instance.new("UICorner")
-DockBorderCorner.CornerRadius = UDim.new(0, 16)
-DockBorderCorner.Parent = DockBorder
+local DockCorner = Instance.new("UICorner")
+DockCorner.CornerRadius = UDim.new(0, 24)
+DockCorner.Parent = DockBorder
 
 local DockRGBGradient = Instance.new("UIGradient")
 DockRGBGradient.Color = TopGradient.Color
 DockRGBGradient.Parent = DockBorder
 
-local Dock = Instance.new("Frame")
-Dock.Size = UDim2.new(1, -5, 1, -5)
-Dock.Position = UDim2.new(0, 2.5, 0, 2.5)
-Dock.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-Dock.BorderSizePixel = 0
-Dock.ZIndex = 11
-Dock.Parent = DockBorder
-
-local DockCorner = Instance.new("UICorner")
-DockCorner.CornerRadius = UDim.new(0, 14)
-DockCorner.Parent = Dock
-
-local DockBgGradient = Instance.new("UIGradient")
-DockBgGradient.Rotation = 90
-DockBgGradient.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0.00, Color3.fromRGB(36, 36, 42)),
-    ColorSequenceKeypoint.new(1.00, Color3.fromRGB(16, 16, 20))
-})
-DockBgGradient.Parent = Dock
-
 RunService.RenderStepped:Connect(function()
     DockRGBGradient.Rotation = (DockRGBGradient.Rotation + 1.8) % 360
 end)
 
-local MiniStatsBorder = Instance.new("Frame")
-MiniStatsBorder.Size = UDim2.new(0, 120, 0, 24)
-MiniStatsBorder.Position = UDim2.new(0, 5, 0, -30)
-MiniStatsBorder.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-MiniStatsBorder.BorderSizePixel = 0
-MiniStatsBorder.ZIndex = 12
-MiniStatsBorder.Parent = DockBorder
+local DockMain = Instance.new("Frame")
+DockMain.Size = UDim2.new(1, -4, 1, -4)
+DockMain.Position = UDim2.new(0, 2, 0, 2)
+DockMain.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
+DockMain.BorderSizePixel = 0
+DockMain.ZIndex = 91
+DockMain.Parent = DockBorder
 
-local MiniStatsCorner = Instance.new("UICorner")
-MiniStatsCorner.CornerRadius = UDim.new(0, 8)
-MiniStatsCorner.Parent = MiniStatsBorder
+local DockMainCorner = Instance.new("UICorner")
+DockMainCorner.CornerRadius = UDim.new(0, 22)
+DockMainCorner.Parent = DockMain
 
-local MiniStatsGradient = Instance.new("UIGradient")
-MiniStatsGradient.Color = TopGradient.Color
-MiniStatsGradient.Parent = MiniStatsBorder
+local DockList = Instance.new("UIListLayout")
+DockList.FillDirection = Enum.FillDirection.Horizontal
+DockList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+DockList.VerticalAlignment = Enum.VerticalAlignment.Center
+DockList.Padding = UDim.new(0, 12)
+DockList.Parent = DockMain
 
-local MiniStatsBg = Instance.new("Frame")
-MiniStatsBg.Size = UDim2.new(1, -3, 1, -3)
-MiniStatsBg.Position = UDim2.new(0, 1.5, 0, 1.5)
-MiniStatsBg.BackgroundColor3 = Color3.fromRGB(20, 20, 26)
-MiniStatsBg.BorderSizePixel = 0
-MiniStatsBg.ZIndex = 13
-MiniStatsBg.Parent = MiniStatsBorder
+-- Dock Button 1: Functions Window Toggle
+local DockBtn1 = Instance.new("ImageButton")
+DockBtn1.Size = UDim2.new(0, 34, 0, 34)
+DockBtn1.BackgroundTransparency = 1
+DockBtn1.Image = "rbxassetid://139807262244286"
+DockBtn1.ZIndex = 92
+DockBtn1.Parent = DockMain
 
-local MiniBgCorner = Instance.new("UICorner")
-MiniBgCorner.CornerRadius = UDim.new(0, 7)
-MiniBgCorner.Parent = MiniStatsBg
+local functionsWinOpen = false
+DockBtn1.MouseButton1Click:Connect(function()
+    playSFX(SFX_NORMAL, 0.5)
+    functionsWinOpen = not functionsWinOpen
+    toggleFunctionsWindow(functionsWinOpen)
+end)
 
-local StatsText = Instance.new("TextLabel")
-StatsText.Size = UDim2.new(1, 0, 1, 0)
-StatsText.BackgroundTransparency = 1
-StatsText.Text = "FPS: 60 | Keyless"
-StatsText.TextColor3 = Color3.fromRGB(220, 220, 230)
-StatsText.TextSize = 10
-StatsText.Font = Enum.Font.GothamBold
-StatsText.ZIndex = 14
-StatsText.Parent = MiniStatsBg
+-- Dock Dragging Feature
+local isDraggingDock = false
+local dragStartDock = Vector2.zero
+local startPosDock = UDim2.new()
 
-local fpsCount = 0
-local lastTick = tick()
-RunService.RenderStepped:Connect(function()
-    fpsCount = fpsCount + 1
-    if tick() - lastTick >= 1 then
-        StatsText.Text = "FPS: " .. tostring(fpsCount) .. " | Keyless"
-        fpsCount = 0
-        lastTick = tick()
+DockMain.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        isDraggingDock = true
+        dragStartDock = input.Position
+        startPosDock = DockBorder.Position
     end
-    MiniStatsGradient.Rotation = (MiniStatsGradient.Rotation + 2) % 360
 end)
 
-local GooglePlayBtn = Instance.new("ImageButton")
-GooglePlayBtn.Size = UDim2.new(0, 24, 0, 24)
-GooglePlayBtn.Position = UDim2.new(0.5, -35, 0.5, -12)
-GooglePlayBtn.BackgroundTransparency = 1
-GooglePlayBtn.Image = "rbxassetid://137441754744010"
-GooglePlayBtn.ZIndex = 15
-GooglePlayBtn.Parent = Dock
-
-local playRotation = 0
-local playIdleConn
-
-local function startPlayIdle()
-    if playIdleConn then playIdleConn:Disconnect() end
-    local t = 0
-    playIdleConn = RunService.RenderStepped:Connect(function(dt)
-        t = t + dt
-        local floatY = math.sin(t * 2.8) * 3
-        GooglePlayBtn.Position = UDim2.new(0.5, -35, 0.5, -12 + floatY)
-    end)
-end
-startPlayIdle()
-
-GooglePlayBtn.MouseButton1Click:Connect(function()
-    playSFX(SFX_NORMAL, 0.6)
-    playRotation = playRotation + 360
-
-    TweenService:Create(GooglePlayBtn, TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-        Rotation = playRotation
-    }):Play()
-
-    if UtilWinBorder.Visible then toggleUtilWindow(false) end
-    toggleFunctionsWindow(not FunctionsWinBorder.Visible)
-end)
-
-local UtilBtn = Instance.new("ImageButton")
-UtilBtn.Size = UDim2.new(0, 24, 0, 24)
-UtilBtn.Position = UDim2.new(0.5, 11, 0.5, -12)
-UtilBtn.BackgroundTransparency = 1
-UtilBtn.Image = "rbxassetid://139971833146352"
-UtilBtn.ZIndex = 15
-UtilBtn.Parent = Dock
-
-local utilRotation = 0
-local utilIdleConn
-
-local function startUtilIdle()
-    if utilIdleConn then utilIdleConn:Disconnect() end
-    local t = 0
-    utilIdleConn = RunService.RenderStepped:Connect(function(dt)
-        t = t + dt
-        local floatY = math.cos(t * 2.8) * 3
-        UtilBtn.Position = UDim2.new(0.5, 11, 0.5, -12 + floatY)
-    end)
-end
-startUtilIdle()
-
-UtilBtn.MouseButton1Click:Connect(function()
-    playSFX(SFX_NORMAL, 0.6)
-    utilRotation = utilRotation + 360
-
-    TweenService:Create(UtilBtn, TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-        Rotation = utilRotation
-    }):Play()
-
-    if FunctionsWinBorder.Visible then toggleFunctionsWindow(false) end
-    toggleUtilWindow(not UtilWinBorder.Visible)
-end)
-
--- ==========================================
--- 7. ЛОГО-КНОПКА
--- ==========================================
-local LogoBtn = Instance.new("ImageButton")
-LogoBtn.Size = UDim2.new(0, 34, 0, 34)
-LogoBtn.Position = UDim2.new(0.5, -17, 0.93, -17)
-LogoBtn.BackgroundTransparency = 1
-LogoBtn.Image = "rbxassetid://139807262244286"
-LogoBtn.ZIndex = 25
-LogoBtn.Parent = Gui
-
-local isOpen = false
-local currentRotation = 0
-local idleConnection
-
-local LOGO_CLOSED = UDim2.new(0.5, -17, 0.93, -17)
-local LOGO_OPEN = UDim2.new(0.5, -17, 0.93, -50)
-
-local function startIdle()
-    if idleConnection then idleConnection:Disconnect() end
-    local time = 0
-    idleConnection = RunService.RenderStepped:Connect(function(dt)
-        if not isOpen then
-            time = time + dt
-            local floatY = math.sin(time * 2.5) * 4
-            local swayRot = math.cos(time * 2) * 3
-            LogoBtn.Position = UDim2.new(0.5, -17, 0.93, -17 + floatY)
-            LogoBtn.Rotation = currentRotation + swayRot
-        end
-    end)
-end
-
-startIdle()
-
-LogoBtn.MouseButton1Click:Connect(function()
-    isOpen = not isOpen
-    playSFX(SFX_NORMAL, 0.6)
-
-    if idleConnection then
-        idleConnection:Disconnect()
-        idleConnection = nil
+UserInputService.InputChanged:Connect(function(input)
+    if isDraggingDock and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStartDock
+        DockBorder.Position = UDim2.new(startPosDock.X.Scale, startPosDock.X.Offset + delta.X, startPosDock.Y.Scale, startPosDock.Y.Offset + delta.Y)
     end
+end)
 
-    currentRotation = currentRotation + 360
-
-    if isOpen then
-        TweenService:Create(DockBorder, TweenInfo.new(0.55, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-            Position = UDim2.new(0.5, -190, 0.93, -27)
-        }):Play()
-
-        TweenService:Create(LogoBtn, TweenInfo.new(0.55, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-            Rotation = currentRotation,
-            Position = LOGO_OPEN
-        }):Play()
-    else
-        TweenService:Create(DockBorder, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
-            Position = UDim2.new(0.5, -190, 1, 100)
-        }):Play()
-
-        TweenService:Create(LogoBtn, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
-            Rotation = currentRotation,
-            Position = LOGO_CLOSED
-        }):Play()
-
-        task.delay(0.45, function()
-            startIdle()
-        end)
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        isDraggingDock = false
     end
 end)
