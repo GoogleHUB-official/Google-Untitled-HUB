@@ -1,0 +1,1950 @@
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local TeleportService = game:GetService("TeleportService")
+
+local LocalPlayer = Players.LocalPlayer
+
+-- Global State Variables
+local fastPromptEnabled = false
+local originalHoldDurations = {}
+
+-- ==========================================
+-- AUTO-REEXECUTE ON TELEPORT (LOBBY -> GAME)
+-- ==========================================
+local queue_on_teleport = (syn and syn.queue_on_teleport) or queue_on_teleport or (Fluxus and Fluxus.queue_on_teleport) or queueonteleport
+if queue_on_teleport and LocalPlayer then
+    LocalPlayer.OnTeleport:Connect(function(State)
+        if State == Enum.TeleportState.Started or State == Enum.TeleportState.InProgress then
+            pcall(function()
+                queue_on_teleport([[
+                    task.wait(1)
+                    -- Google Untitled HUB Auto-Reexecuted
+                ]])
+            end)
+        end
+    end)
+end
+
+-- Place IDs
+local LOBBY_PLACE_ID = 16091152011
+local BROOKHAVEN_PLACE_ID = 4924922222
+
+local function isGamePlace()
+    if game.PlaceId == LOBBY_PLACE_ID then
+        return false
+    end
+    local hasGenerators = Workspace:FindFirstChild("Generators") or Workspace:FindFirstChild("Machines") or Workspace:FindFirstChild("Rooms")
+    local hasTwisteds = Workspace:FindFirstChild("Twisteds") or Workspace:FindFirstChild("Monsters")
+    return (hasGenerators ~= nil or hasTwisteds ~= nil or game.PlaceId ~= LOBBY_PLACE_ID)
+end
+
+-- Parent GUI (Безопасное прикрепление)
+local Gui = Instance.new("ScreenGui")
+Gui.Name = "GoogleUntitledHUB"
+Gui.ResetOnSpawn = false
+Gui.IgnoreGuiInset = true
+Gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+local targetParent = (gethui and gethui()) or CoreGui
+pcall(function() Gui.Parent = targetParent end)
+if not Gui.Parent or not Gui:IsDescendantOf(game) then
+    Gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+end
+
+-- SFX IDs
+local SFX_NORMAL = "rbxassetid://125674810989097"
+local SFX_NOTIFY = "rbxassetid://8055713313"
+
+local googleColors = {
+    Color3.fromRGB(66, 133, 244), -- Blue
+    Color3.fromRGB(234, 67, 53),  -- Red
+    Color3.fromRGB(251, 188, 5),  -- Yellow
+    Color3.fromRGB(52, 168, 83)   -- Green
+}
+
+local function playSFX(soundId, volume)
+    task.spawn(function()
+        local sound = Instance.new("Sound")
+        sound.SoundId = soundId
+        sound.Volume = volume or 0.6
+        sound.Parent = Gui
+        sound:Play()
+        sound.Ended:Connect(function() sound:Destroy() end)
+    end)
+end
+
+-- ==========================================
+-- 1. ENHANCED NOTIFICATIONS SYSTEM
+-- ==========================================
+local NotifyHolder = Instance.new("Frame")
+NotifyHolder.Name = "NotifyHolder"
+NotifyHolder.Size = UDim2.new(0, 310, 1, -40)
+NotifyHolder.Position = UDim2.new(1, -320, 0, 30)
+NotifyHolder.BackgroundTransparency = 1
+NotifyHolder.ZIndex = 200
+NotifyHolder.Parent = Gui
+
+local NotifyList = Instance.new("UIListLayout")
+NotifyList.SortOrder = Enum.SortOrder.LayoutOrder
+NotifyList.Padding = UDim.new(0, 8)
+NotifyList.VerticalAlignment = Enum.VerticalAlignment.Top
+NotifyList.Parent = NotifyHolder
+
+local function Notify(title, text, duration)
+    duration = duration or 5
+    playSFX(SFX_NOTIFY, 0.7)
+
+    local Card = Instance.new("Frame")
+    Card.Size = UDim2.new(1, 0, 0, 72)
+    Card.Position = UDim2.new(1, 340, 0, 0)
+    Card.BackgroundColor3 = Color3.fromRGB(20, 20, 26)
+    Card.BorderSizePixel = 0
+    Card.ClipsDescendants = true
+    Card.ZIndex = 201
+    Card.Parent = NotifyHolder
+
+    local CardCorner = Instance.new("UICorner")
+    CardCorner.CornerRadius = UDim.new(0, 12)
+    CardCorner.Parent = Card
+
+    local Stroke = Instance.new("UIStroke")
+    Stroke.Thickness = 1.8
+    Stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    Stroke.Parent = Card
+
+    local StrokeGradient = Instance.new("UIGradient")
+    StrokeGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0.00, Color3.fromRGB(66, 133, 244)),
+        ColorSequenceKeypoint.new(0.33, Color3.fromRGB(234, 67, 53)),
+        ColorSequenceKeypoint.new(0.66, Color3.fromRGB(251, 188, 5)),
+        ColorSequenceKeypoint.new(1.00, Color3.fromRGB(52, 168, 83))
+    })
+    StrokeGradient.Parent = Stroke
+
+    local Logo = Instance.new("ImageLabel")
+    Logo.Size = UDim2.new(0, 28, 0, 28)
+    Logo.Position = UDim2.new(0, 12, 0.5, -14)
+    Logo.BackgroundTransparency = 1
+    Logo.Image = "rbxassetid://139807262244286"
+    Logo.ZIndex = 202
+    Logo.Parent = Card
+
+    local TitleLbl = Instance.new("TextLabel")
+    TitleLbl.Size = UDim2.new(1, -50, 0, 16)
+    TitleLbl.Position = UDim2.new(0, 48, 0, 10)
+    TitleLbl.BackgroundTransparency = 1
+    TitleLbl.Text = title
+    TitleLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+    TitleLbl.TextSize = 12
+    TitleLbl.Font = Enum.Font.GothamBold
+    TitleLbl.TextXAlignment = Enum.TextXAlignment.Left
+    TitleLbl.ZIndex = 202
+    TitleLbl.Parent = Card
+
+    local TextLbl = Instance.new("TextLabel")
+    TextLbl.Size = UDim2.new(1, -52, 0, 36)
+    TextLbl.Position = UDim2.new(0, 48, 0, 26)
+    TextLbl.BackgroundTransparency = 1
+    TextLbl.Text = text
+    TextLbl.TextColor3 = Color3.fromRGB(185, 185, 195)
+    TextLbl.TextSize = 10
+    TextLbl.Font = Enum.Font.Gotham
+    TextLbl.TextWrapped = true
+    TextLbl.TextXAlignment = Enum.TextXAlignment.Left
+    TextLbl.TextYAlignment = Enum.TextYAlignment.Top
+    TextLbl.ZIndex = 202
+    TextLbl.Parent = Card
+
+    local ProgressBar = Instance.new("Frame")
+    ProgressBar.Size = UDim2.new(1, 0, 0, 3)
+    ProgressBar.Position = UDim2.new(0, 0, 1, -3)
+    ProgressBar.BackgroundColor3 = Color3.fromRGB(66, 133, 244)
+    ProgressBar.BorderSizePixel = 0
+    ProgressBar.ZIndex = 203
+    ProgressBar.Parent = Card
+
+    Card.Size = UDim2.new(0.8, 0, 0, 72)
+    TweenService:Create(Card, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Position = UDim2.new(0, 0, 0, 0),
+        Size = UDim2.new(1, 0, 0, 72)
+    }):Play()
+
+    local isDragging = false
+    local dragStart = Vector2.zero
+    local startYOffset = 0
+
+    Card.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            isDragging = true
+            dragStart = input.Position
+            startYOffset = Card.Position.Y.Offset
+        end
+    end)
+
+    Card.InputChanged:Connect(function(input)
+        if isDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local deltaY = input.Position.Y - dragStart.Y
+            Card.Position = UDim2.new(0, 0, 0, startYOffset + deltaY)
+        end
+    end)
+
+    local function releaseSpring()
+        if isDragging then
+            isDragging = false
+            TweenService:Create(Card, TweenInfo.new(0.5, Enum.EasingStyle.Elastic, Enum.EasingDirection.Out), {
+                Position = UDim2.new(0, 0, 0, 0)
+            }):Play()
+        end
+    end
+
+    Card.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            releaseSpring()
+        end
+    end)
+
+    local notifyConn
+    notifyConn = RunService.RenderStepped:Connect(function()
+        StrokeGradient.Rotation = (StrokeGradient.Rotation + 2) % 360
+        Logo.Rotation = (Logo.Rotation + 2) % 360
+    end)
+
+    TweenService:Create(ProgressBar, TweenInfo.new(duration, Enum.EasingStyle.Linear), {Size = UDim2.new(0, 0, 0, 3)}):Play()
+
+    task.delay(duration, function()
+        if notifyConn then notifyConn:Disconnect() end
+        local fade = TweenService:Create(Card, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+            Position = UDim2.new(1, 340, 0, 0),
+            Size = UDim2.new(0.6, 0, 0, 72),
+            BackgroundTransparency = 1
+        })
+        fade:Play()
+        fade.Completed:Connect(function() Card:Destroy() end)
+    end)
+end
+
+if game.PlaceId == BROOKHAVEN_PLACE_ID then
+    Notify("Google HUB", "Brookhaven RP detected! Additional features loaded.", 6)
+elseif not isGamePlace() then
+    Notify("Google HUB - Lobby Mode", "You are in the Lobby! Functions will adapt automatically.", 6)
+end
+
+-- ==========================================
+-- 2. FULLSCREEN LOADING SCREEN
+-- ==========================================
+local LoadFrame = Instance.new("Frame")
+LoadFrame.Size = UDim2.new(1, 0, 1, 0)
+LoadFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 14)
+LoadFrame.BackgroundTransparency = 0.15
+LoadFrame.BorderSizePixel = 0
+LoadFrame.ZIndex = 100
+LoadFrame.Parent = Gui
+
+local TopBar = Instance.new("Frame")
+TopBar.Size = UDim2.new(1, 0, 0, 4)
+TopBar.BorderSizePixel = 0
+TopBar.ZIndex = 102
+TopBar.Parent = LoadFrame
+
+local TopGradient = Instance.new("UIGradient")
+TopGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0.00, Color3.fromRGB(66, 133, 244)),
+    ColorSequenceKeypoint.new(0.33, Color3.fromRGB(234, 67, 53)),
+    ColorSequenceKeypoint.new(0.66, Color3.fromRGB(251, 188, 5)),
+    ColorSequenceKeypoint.new(1.00, Color3.fromRGB(52, 168, 83))
+})
+TopGradient.Parent = TopBar
+
+local rgbTopConnection = RunService.RenderStepped:Connect(function()
+    TopGradient.Rotation = (TopGradient.Rotation + 2) % 360
+end)
+
+local starSpawning = true
+task.spawn(function()
+    while starSpawning do
+        task.wait(math.random(1, 3) / 10)
+        local star = Instance.new("TextLabel")
+        star.Text = "★"
+        star.Size = UDim2.new(0, 20, 0, 20)
+        star.Position = UDim2.new(math.random(), 0, -0.05, 0)
+        star.BackgroundTransparency = 1
+        
+        local initialColorIdx = math.random(1, #googleColors)
+        star.TextColor3 = googleColors[initialColorIdx]
+        star.TextTransparency = math.random(2, 5) / 10
+        star.TextSize = math.random(14, 24)
+        star.ZIndex = 101
+        star.Parent = LoadFrame
+
+        task.spawn(function()
+            local colIdx = initialColorIdx
+            while star and star.Parent do
+                colIdx = (colIdx % #googleColors) + 1
+                TweenService:Create(star, TweenInfo.new(0.8, Enum.EasingStyle.Linear), {
+                    TextColor3 = googleColors[colIdx]
+                }):Play()
+                task.wait(0.8)
+            end
+        end)
+
+        local fallDuration = math.random(25, 45) / 10
+        local tween = TweenService:Create(star, TweenInfo.new(fallDuration, Enum.EasingStyle.Linear), {
+            Position = UDim2.new(star.Position.X.Scale + (math.random(-10, 10) / 100), 0, 1.05, 0),
+            TextTransparency = 1,
+            Rotation = math.random(-180, 180)
+        })
+        tween:Play()
+        tween.Completed:Connect(function() star:Destroy() end)
+    end
+end)
+
+local LoadLogo = Instance.new("ImageLabel")
+LoadLogo.Size = UDim2.new(0, 70, 0, 70)
+LoadLogo.Position = UDim2.new(0.5, -35, 0.42, -35)
+LoadLogo.BackgroundTransparency = 1
+LoadLogo.Image = "rbxassetid://139807262244286"
+LoadLogo.ZIndex = 103
+LoadLogo.Parent = LoadFrame
+
+local StatusText = Instance.new("TextLabel")
+StatusText.Size = UDim2.new(0, 350, 0, 30)
+StatusText.Position = UDim2.new(0.5, -175, 0.42, 45)
+StatusText.BackgroundTransparency = 1
+StatusText.Text = "Loading Google Untitled HUB..."
+StatusText.TextColor3 = Color3.fromRGB(220, 220, 225)
+StatusText.TextSize = 14
+StatusText.Font = Enum.Font.GothamMedium
+StatusText.ZIndex = 103
+StatusText.Parent = LoadFrame
+
+local loadHover = TweenService:Create(LoadLogo, TweenInfo.new(1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+    Position = UDim2.new(0.5, -35, 0.42, -45)
+})
+loadHover:Play()
+
+task.spawn(function()
+    task.wait(1.5)
+    StatusText.Text = "Loaded Successfully!"
+    StatusText.TextColor3 = Color3.fromRGB(52, 168, 83)
+    
+    task.wait(0.4)
+    starSpawning = false
+    loadHover:Cancel()
+
+    local flipAndDrop = TweenService:Create(LoadLogo, TweenInfo.new(0.7, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+        Rotation = 360,
+        Position = UDim2.new(0.5, -35, 1.2, 0)
+    })
+    
+    local textDrop = TweenService:Create(StatusText, TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+        Position = UDim2.new(0.5, -175, 1.25, 0),
+        TextTransparency = 1
+    })
+
+    local fadeBg = TweenService:Create(LoadFrame, TweenInfo.new(0.7, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        BackgroundTransparency = 1
+    })
+    
+    flipAndDrop:Play()
+    textDrop:Play()
+    fadeBg:Play()
+    
+    task.wait(0.75)
+    rgbTopConnection:Disconnect()
+    LoadFrame:Destroy()
+
+    Notify("Google HUB", "Thank you for using Google untitled HUB!", 5.5)
+end)
+
+-- ==========================================
+-- IMPROVED UI HELPER FUNCTIONS & SLIDER
+-- ==========================================
+local function CreateButton(parentScroll, text, callback)
+    local baseZ = parentScroll.ZIndex + 1
+
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -6, 0, 32)
+    btn.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(230, 230, 240)
+    btn.Font = Enum.Font.GothamMedium
+    btn.TextSize = 11
+    btn.AutoButtonColor = false
+    btn.ZIndex = baseZ
+    btn.Parent = parentScroll
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = btn
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Thickness = 1
+    stroke.Color = Color3.fromRGB(50, 50, 65)
+    stroke.Parent = btn
+
+    btn.MouseEnter:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(42, 42, 54)}):Play()
+        TweenService:Create(stroke, TweenInfo.new(0.2), {Color = Color3.fromRGB(66, 133, 244)}):Play()
+    end)
+
+    btn.MouseLeave:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(30, 30, 38)}):Play()
+        TweenService:Create(stroke, TweenInfo.new(0.2), {Color = Color3.fromRGB(50, 50, 65)}):Play()
+    end)
+
+    btn.MouseButton1Click:Connect(function()
+        playSFX(SFX_NORMAL, 0.5)
+        TweenService:Create(btn, TweenInfo.new(0.08), {Size = UDim2.new(1, -10, 0, 30)}):Play()
+        task.delay(0.08, function()
+            TweenService:Create(btn, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = UDim2.new(1, -6, 0, 32)}):Play()
+        end)
+        if callback then callback() end
+    end)
+    return btn
+end
+
+local function CreateToggle(parentScroll, text, defaultState, callback)
+    local baseZ = parentScroll.ZIndex + 1
+    local toggled = defaultState or false
+
+    local container = Instance.new("Frame")
+    container.Size = UDim2.new(1, -6, 0, 34)
+    container.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
+    container.ZIndex = baseZ
+    container.Parent = parentScroll
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = container
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Thickness = 1
+    stroke.Color = Color3.fromRGB(50, 50, 65)
+    stroke.Parent = container
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -50, 1, 0)
+    label.Position = UDim2.new(0, 10, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = Color3.fromRGB(230, 230, 240)
+    label.Font = Enum.Font.GothamMedium
+    label.TextSize = 11
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.ZIndex = baseZ + 1
+    label.Parent = container
+
+    local switchBg = Instance.new("Frame")
+    switchBg.Size = UDim2.new(0, 36, 0, 18)
+    switchBg.Position = UDim2.new(1, -42, 0.5, -9)
+    switchBg.BackgroundColor3 = toggled and Color3.fromRGB(52, 168, 83) or Color3.fromRGB(50, 50, 60)
+    switchBg.BorderSizePixel = 0
+    switchBg.ZIndex = baseZ + 1
+    switchBg.Parent = container
+
+    local switchCorner = Instance.new("UICorner")
+    switchCorner.CornerRadius = UDim.new(1, 0)
+    switchCorner.Parent = switchBg
+
+    local knob = Instance.new("Frame")
+    knob.Size = UDim2.new(0, 14, 0, 14)
+    knob.Position = toggled and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)
+    knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    knob.BorderSizePixel = 0
+    knob.ZIndex = baseZ + 2
+    knob.Parent = switchBg
+
+    local knobCorner = Instance.new("UICorner")
+    knobCorner.CornerRadius = UDim.new(1, 0)
+    knobCorner.Parent = knob
+
+    local clickBtn = Instance.new("TextButton")
+    clickBtn.Size = UDim2.new(1, 0, 1, 0)
+    clickBtn.BackgroundTransparency = 1
+    clickBtn.Text = ""
+    clickBtn.ZIndex = baseZ + 3
+    clickBtn.Parent = container
+
+    clickBtn.MouseButton1Click:Connect(function()
+        toggled = not toggled
+        playSFX(SFX_NORMAL, 0.5)
+
+        TweenService:Create(switchBg, TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+            BackgroundColor3 = toggled and Color3.fromRGB(52, 168, 83) or Color3.fromRGB(50, 50, 60)
+        }):Play()
+
+        TweenService:Create(knob, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Position = toggled and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)
+        }):Play()
+
+        if callback then callback(toggled) end
+    end)
+
+    return container
+end
+
+local function CreateSlider(parentScroll, text, minVal, maxVal, defaultVal, callback)
+    local baseZ = parentScroll.ZIndex + 1
+    local currentValue = math.clamp(defaultVal or minVal, minVal, maxVal)
+
+    local container = Instance.new("Frame")
+    container.Size = UDim2.new(1, -6, 0, 42)
+    container.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
+    container.ZIndex = baseZ
+    container.Parent = parentScroll
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = container
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Thickness = 1
+    stroke.Color = Color3.fromRGB(50, 50, 65)
+    stroke.Parent = container
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0.6, 0, 0, 18)
+    label.Position = UDim2.new(0, 10, 0, 4)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = Color3.fromRGB(230, 230, 240)
+    label.Font = Enum.Font.GothamMedium
+    label.TextSize = 11
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.ZIndex = baseZ + 1
+    label.Parent = container
+
+    local valText = Instance.new("TextLabel")
+    valText.Size = UDim2.new(0.35, -10, 0, 18)
+    valText.Position = UDim2.new(0.65, 0, 0, 4)
+    valText.BackgroundTransparency = 1
+    valText.Text = tostring(currentValue)
+    valText.TextColor3 = Color3.fromRGB(66, 133, 244)
+    valText.Font = Enum.Font.GothamBold
+    valText.TextSize = 11
+    valText.TextXAlignment = Enum.TextXAlignment.Right
+    valText.ZIndex = baseZ + 1
+    valText.Parent = container
+
+    local sliderBar = Instance.new("Frame")
+    sliderBar.Size = UDim2.new(1, -20, 0, 6)
+    sliderBar.Position = UDim2.new(0, 10, 1, -12)
+    sliderBar.BackgroundColor3 = Color3.fromRGB(45, 45, 58)
+    sliderBar.BorderSizePixel = 0
+    sliderBar.ZIndex = baseZ + 1
+    sliderBar.Parent = container
+
+    local sliderBarCorner = Instance.new("UICorner")
+    sliderBarCorner.CornerRadius = UDim.new(1, 0)
+    sliderBarCorner.Parent = sliderBar
+
+    local fillBar = Instance.new("Frame")
+    fillBar.Size = UDim2.new((currentValue - minVal) / (maxVal - minVal), 0, 1, 0)
+    fillBar.BackgroundColor3 = Color3.fromRGB(66, 133, 244)
+    fillBar.BorderSizePixel = 0
+    fillBar.ZIndex = baseZ + 2
+    fillBar.Parent = sliderBar
+
+    local fillCorner = Instance.new("UICorner")
+    fillCorner.CornerRadius = UDim.new(1, 0)
+    fillCorner.Parent = fillBar
+
+    local isDragging = false
+
+    local function updateSlider(input)
+        local pos = math.clamp((input.Position.X - sliderBar.AbsolutePosition.X) / sliderBar.AbsoluteSize.X, 0, 1)
+        currentValue = math.floor(minVal + (maxVal - minVal) * pos)
+        valText.Text = tostring(currentValue)
+        
+        TweenService:Create(fillBar, TweenInfo.new(0.05), {
+            Size = UDim2.new(pos, 0, 1, 0)
+        }):Play()
+
+        if callback then callback(currentValue) end
+    end
+
+    sliderBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            isDragging = true
+            updateSlider(input)
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if isDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            updateSlider(input)
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            isDragging = false
+        end
+    end)
+
+    return container
+end
+
+-- ==========================================
+-- 3. MAIN GUI WINDOW (WITH GOOGLE RGB BORDER)
+-- ==========================================
+local FunctionsWinBorder = Instance.new("Frame")
+FunctionsWinBorder.Name = "FunctionsWinBorder"
+FunctionsWinBorder.Size = UDim2.new(0, 484, 0, 314)
+FunctionsWinBorder.Position = UDim2.new(0.5, -242, 0.42, -157)
+FunctionsWinBorder.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+FunctionsWinBorder.BorderSizePixel = 0
+FunctionsWinBorder.Visible = false
+FunctionsWinBorder.ClipsDescendants = true
+FunctionsWinBorder.ZIndex = 39
+FunctionsWinBorder.Parent = Gui
+
+local FunctionsWinBorderCorner = Instance.new("UICorner")
+FunctionsWinBorderCorner.CornerRadius = UDim.new(0, 16)
+FunctionsWinBorderCorner.Parent = FunctionsWinBorder
+
+local FunctionsRGBGradient = Instance.new("UIGradient")
+FunctionsRGBGradient.Color = TopGradient.Color
+FunctionsRGBGradient.Parent = FunctionsWinBorder
+
+local FunctionsWin = Instance.new("Frame")
+FunctionsWin.Size = UDim2.new(1, -4, 1, -4)
+FunctionsWin.Position = UDim2.new(0, 2, 0, 2)
+FunctionsWin.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
+FunctionsWin.BorderSizePixel = 0
+FunctionsWin.ClipsDescendants = true
+FunctionsWin.ZIndex = 40
+FunctionsWin.Parent = FunctionsWinBorder
+
+local WinCorner = Instance.new("UICorner")
+WinCorner.CornerRadius = UDim.new(0, 14)
+WinCorner.Parent = FunctionsWin
+
+local WinStroke = Instance.new("UIStroke")
+WinStroke.Thickness = 1.2
+WinStroke.Color = Color3.fromRGB(40, 40, 50)
+WinStroke.Parent = FunctionsWin
+
+local HeaderIcon = Instance.new("ImageLabel")
+HeaderIcon.Size = UDim2.new(0, 20, 0, 20)
+HeaderIcon.Position = UDim2.new(0, 12, 0, 8)
+HeaderIcon.BackgroundTransparency = 1
+HeaderIcon.Image = "rbxassetid://139807262244286"
+HeaderIcon.ZIndex = 41
+HeaderIcon.Parent = FunctionsWin
+
+local WinTitle = Instance.new("TextLabel")
+WinTitle.Size = UDim2.new(1, -45, 0, 20)
+WinTitle.Position = UDim2.new(0, 38, 0, 8)
+WinTitle.BackgroundTransparency = 1
+WinTitle.RichText = true
+WinTitle.Text = '<font color="#FBBC05">G</font><font color="#EA4335">o</font><font color="#4285F4">o</font><font color="#34A853">g</font><font color="#FBBC05">l</font><font color="#EA4335">e</font> <font color="#4285F4">P</font><font color="#34A853">l</font><font color="#FBBC05">a</font><font color="#EA4335">y</font> <font color="#4285F4">F</font><font color="#34A853">e</font><font color="#FBBC05">a</font><font color="#EA4335">t</font><font color="#4285F4">u</font><font color="#34A853">r</font><font color="#FBBC05">e</font><font color="#EA4335">s</font>'
+WinTitle.TextSize = 13
+WinTitle.Font = Enum.Font.GothamBold
+WinTitle.TextXAlignment = Enum.TextXAlignment.Left
+WinTitle.ZIndex = 41
+WinTitle.Parent = FunctionsWin
+
+local HeaderBarrier = Instance.new("Frame")
+HeaderBarrier.Size = UDim2.new(1, -20, 0, 1)
+HeaderBarrier.Position = UDim2.new(0, 10, 0, 32)
+HeaderBarrier.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+HeaderBarrier.BorderSizePixel = 0
+HeaderBarrier.ZIndex = 41
+HeaderBarrier.Parent = FunctionsWin
+
+local BarrierGradient = Instance.new("UIGradient")
+BarrierGradient.Color = TopGradient.Color
+BarrierGradient.Parent = HeaderBarrier
+
+local TabHolder = Instance.new("Frame")
+TabHolder.Size = UDim2.new(1, -20, 0, 28)
+TabHolder.Position = UDim2.new(0, 10, 0, 36)
+TabHolder.BackgroundTransparency = 1
+TabHolder.ZIndex = 41
+TabHolder.Parent = FunctionsWin
+
+local TabList = Instance.new("UIListLayout")
+TabList.FillDirection = Enum.FillDirection.Horizontal
+TabList.SortOrder = Enum.SortOrder.LayoutOrder
+TabList.Padding = UDim.new(0, 8)
+TabList.Parent = TabHolder
+
+local ContentArea = Instance.new("Frame")
+ContentArea.Size = UDim2.new(1, -20, 1, -76)
+ContentArea.Position = UDim2.new(0, 10, 0, 68)
+ContentArea.BackgroundTransparency = 1
+ContentArea.ZIndex = 41
+ContentArea.Parent = FunctionsWin
+
+RunService.RenderStepped:Connect(function()
+    FunctionsRGBGradient.Rotation = (FunctionsRGBGradient.Rotation + 1.8) % 360
+    BarrierGradient.Rotation = (BarrierGradient.Rotation + 2) % 360
+end)
+
+local tabs = {}
+local function createTab(tabName, icon)
+    local tabBtn = Instance.new("TextButton")
+    tabBtn.Size = UDim2.new(0, 105, 1, 0)
+    tabBtn.BackgroundColor3 = Color3.fromRGB(28, 28, 36)
+    tabBtn.Text = icon .. "  " .. tabName
+    tabBtn.TextColor3 = Color3.fromRGB(150, 150, 165)
+    tabBtn.Font = Enum.Font.GothamBold
+    tabBtn.TextSize = 10
+    tabBtn.ZIndex = 42
+    tabBtn.AutoButtonColor = false
+    tabBtn.Parent = TabHolder
+
+    local tabCorner = Instance.new("UICorner")
+    tabCorner.CornerRadius = UDim.new(0, 8)
+    tabCorner.Parent = tabBtn
+
+    local activeBar = Instance.new("Frame")
+    activeBar.Size = UDim2.new(0, 0, 0, 2)
+    activeBar.Position = UDim2.new(0.5, 0, 1, -2)
+    activeBar.AnchorPoint = Vector2.new(0.5, 0)
+    activeBar.BackgroundColor3 = Color3.fromRGB(66, 133, 244)
+    activeBar.BorderSizePixel = 0
+    activeBar.ZIndex = 43
+    activeBar.Parent = tabBtn
+
+    local tabScroll = Instance.new("ScrollingFrame")
+    tabScroll.Size = UDim2.new(1, 0, 1, 0)
+    tabScroll.BackgroundTransparency = 1
+    tabScroll.BorderSizePixel = 0
+    tabScroll.ScrollBarThickness = 3
+    tabScroll.Visible = false
+    tabScroll.ZIndex = 42
+    tabScroll.Parent = ContentArea
+
+    local scrollList = Instance.new("UIListLayout")
+    scrollList.SortOrder = Enum.SortOrder.LayoutOrder
+    scrollList.Padding = UDim.new(0, 6)
+    scrollList.Parent = tabScroll
+
+    scrollList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        tabScroll.CanvasSize = UDim2.new(0, 0, 0, scrollList.AbsoluteContentSize.Y + 10)
+    end)
+
+    tabBtn.MouseButton1Click:Connect(function()
+        playSFX(SFX_NORMAL, 0.4)
+        for _, t in pairs(tabs) do
+            TweenService:Create(t.Btn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(28, 28, 36), TextColor3 = Color3.fromRGB(150, 150, 165)}):Play()
+            TweenService:Create(t.Bar, TweenInfo.new(0.2), {Size = UDim2.new(0, 0, 0, 2)}):Play()
+            t.Container.Visible = false
+        end
+        TweenService:Create(tabBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(40, 42, 54), TextColor3 = Color3.fromRGB(255, 255, 255)}):Play()
+        TweenService:Create(activeBar, TweenInfo.new(0.2), {Size = UDim2.new(0.8, 0, 0, 2)}):Play()
+        tabScroll.Visible = true
+    end)
+
+    local tabData = {Btn = tabBtn, Bar = activeBar, Container = tabScroll}
+    table.insert(tabs, tabData)
+
+    if #tabs == 1 then
+        tabBtn.BackgroundColor3 = Color3.fromRGB(40, 42, 54)
+        tabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        activeBar.Size = UDim2.new(0.8, 0, 0, 2)
+        tabScroll.Visible = true
+    end
+
+    return tabScroll
+end
+
+-- Вкладки
+local TabAutoCollect = createTab("auto collect", "⚡")
+local TabESP = createTab("ESP", "👁️")
+local TabTroll = createTab("Troll", "🤡")
+local TabYou = createTab("You", "👤")
+
+-- ==========================================
+-- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ DANDY'S WORLD
+-- ==========================================
+local function isGeneratorObject(obj)
+    if not obj then return false end
+    if not (obj:IsA("Model") or obj:IsA("BasePart")) then return false end
+
+    local nameLower = string.lower(obj.Name)
+    local isGenName = string.find(nameLower, "generator") or string.find(nameLower, "machine") or string.find(nameLower, "inchor") or string.find(nameLower, "ichor") or string.find(nameLower, "valve")
+    
+    if not isGenName and obj.Parent then
+        local pName = string.lower(obj.Parent.Name)
+        if (pName == "generators" or pName == "machines" or pName == "anchors" or pName == "inchors") and obj:IsA("Model") then
+            isGenName = true
+        end
+    end
+    
+    if not isGenName then return false end
+
+    local hasPrompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true) ~= nil
+    local hasProgress = obj:FindFirstChild("Progress", true) ~= nil or obj:FindFirstChild("Completed", true) ~= nil or obj:FindFirstChild("IsCompleted", true) ~= nil or obj:FindFirstChild("Done", true) ~= nil
+
+    if not (hasPrompt or hasProgress) then
+        return false
+    end
+
+    if obj:IsA("Model") then
+        if obj.Parent and obj.Parent:IsA("Model") then
+            local pName = string.lower(obj.Parent.Name)
+            if string.find(pName, "generator") or string.find(pName, "machine") or string.find(pName, "inchor") or string.find(pName, "ichor") then
+                return false
+            end
+        end
+        return true
+    elseif obj:IsA("BasePart") then
+        if not (obj.Parent and obj.Parent:IsA("Model")) then
+            return true
+        end
+    end
+    return false
+end
+
+local function isGeneratorCompleted(obj)
+    if not obj then return true end
+
+    local progressVal = obj:FindFirstChild("Progress", true)
+    if progressVal and (progressVal:IsA("NumberValue") or progressVal:IsA("IntValue")) then
+        return progressVal.Value >= 100 or progressVal.Value >= 1
+    end
+
+    local completedVal = obj:FindFirstChild("Completed", true) or obj:FindFirstChild("IsCompleted", true) or obj:FindFirstChild("Done", true)
+    if completedVal then
+        if completedVal:IsA("BoolValue") then
+            return completedVal.Value == true
+        elseif completedVal:IsA("StringValue") or completedVal:IsA("IntValue") or completedVal:IsA("NumberValue") then
+            return tostring(completedVal.Value) == "true" or completedVal.Value == 1
+        end
+    end
+
+    local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
+    if prompt then
+        return not prompt.Enabled
+    end
+
+    return false
+end
+
+local function getGeneratorList()
+    local list = {}
+    local seen = {}
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        if isGeneratorObject(obj) and not seen[obj] then
+            seen[obj] = true
+            table.insert(list, obj)
+        end
+    end
+    return list
+end
+
+local function getActiveGeneratorList()
+    local list = {}
+    local seen = {}
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        if isGeneratorObject(obj) and not isGeneratorCompleted(obj) and not seen[obj] then
+            seen[obj] = true
+            table.insert(list, obj)
+        end
+    end
+    return list
+end
+
+local validItemsList = {
+    "research", "gumballs", "gumball", "chocolate", "stopwatch",
+    "stamina candy", "stealth candy", "pop", "speed candy", "protein bar",
+    "instructions", "extraction speed candy", "skill check candy", "jumper cable",
+    "bandage", "air horn", "jawbreaker", "bonbon", "christmas cookie",
+    "dandy easter egg", "bottle o' pop", "health kit", "medkit", "med kit",
+    "box o' chocolates", "eject button", "smoke bomb", "valve", "ornaments",
+    "baskets", "pumpkins", "candy", "candies", "gum"
+}
+
+local function isItemNameMatch(name)
+    local nameLower = string.lower(name)
+    for _, itemName in ipairs(validItemsList) do
+        if string.find(nameLower, itemName, 1, true) then
+            return true
+        end
+    end
+    return false
+end
+
+local function isItemObject(obj)
+    if not obj or not (obj:IsA("Model") or obj:IsA("BasePart")) then return false end
+
+    local nameLower = string.lower(obj.Name)
+    if string.find(nameLower, "twisted") or string.find(nameLower, "monster") or string.find(nameLower, "elevator") or string.find(nameLower, "lift") then
+        return false
+    end
+    if string.find(nameLower, "capsule") or string.find(nameLower, "ichor") or string.find(nameLower, "tape") then
+        return false
+    end
+
+    local parentObj = obj.Parent
+    while parentObj and parentObj ~= Workspace do
+        local pName = string.lower(parentObj.Name)
+        if (string.find(pName, "generator") or string.find(pName, "machine")) and not string.find(pName, "item") then
+            return false
+        end
+        parentObj = parentObj.Parent
+    end
+
+    if isItemNameMatch(obj.Name) then
+        if obj:IsA("BasePart") and obj.Parent and obj.Parent:IsA("Model") and isItemNameMatch(obj.Parent.Name) then
+            return false
+        end
+        return true
+    end
+
+    return false
+end
+
+local function isCapsuleObject(obj)
+    if not obj or not (obj:IsA("Model") or obj:IsA("BasePart")) then return false end
+    
+    local nameLower = string.lower(obj.Name)
+    if not (string.find(nameLower, "capsule") or string.find(nameLower, "ichor")) then
+        return false
+    end
+    if string.find(nameLower, "fake") or string.find(nameLower, "puddle") or string.find(nameLower, "stain") or string.find(nameLower, "decor") then
+        return false
+    end
+
+    local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
+    if not prompt then return false end
+
+    local current = obj.Parent
+    while current and current ~= Workspace do
+        local cName = string.lower(current.Name)
+        if string.find(cName, "generator") or string.find(cName, "machine") or string.find(cName, "elevator") then
+            return false
+        end
+        current = current.Parent
+    end
+
+    return true
+end
+
+local function isTapeObject(obj)
+    if not obj or not (obj:IsA("Model") or obj:IsA("BasePart")) then return false end
+    local nameLower = string.lower(obj.Name)
+    if not string.find(nameLower, "tape") or string.find(nameLower, "fake") then
+        return false
+    end
+    if obj:IsA("BasePart") and obj.Parent and obj.Parent:IsA("Model") and string.find(string.lower(obj.Parent.Name), "tape") then
+        return false
+    end
+    return true
+end
+
+-- ==========================================
+-- ЛОГИКА ESP И ОБНОВЛЕНИЕ
+-- ==========================================
+local espHighlights = {}
+local espStates = {
+    Twisteds = false,
+    Generators = false,
+    Items = false,
+    Tapes = false,
+    Ichor = false,
+    Players = false
+}
+
+local function applyESP(object, name, color)
+    if not object or (not object:IsA("Model") and not object:IsA("BasePart")) then return end
+    if espHighlights[object] then return end
+
+    local hl = Instance.new("Highlight")
+    hl.Name = "DandyESP_" .. name
+    hl.FillColor = color
+    hl.FillTransparency = 0.5
+    hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+    hl.OutlineTransparency = 0
+    pcall(function() hl.Parent = object end)
+
+    espHighlights[object] = hl
+end
+
+local function clearESPGroup(groupTag)
+    for obj, hl in pairs(espHighlights) do
+        if hl and hl.Name == "DandyESP_" .. groupTag then
+            pcall(function() hl:Destroy() end)
+            espHighlights[obj] = nil
+        end
+    end
+end
+
+local function updateESPLogic()
+    for obj, hl in pairs(espHighlights) do
+        if not obj or not obj.Parent or not hl or not hl.Parent then
+            if hl and hl.Parent then pcall(function() hl:Destroy() end) end
+            espHighlights[obj] = nil
+        end
+    end
+
+    if espStates.Twisteds then
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if obj:IsA("Model") then
+                local nameLower = string.lower(obj.Name)
+                if (string.find(nameLower, "twisted") or string.find(nameLower, "monster")) and not espHighlights[obj] then
+                    applyESP(obj, "Twisteds", Color3.fromRGB(234, 67, 53))
+                end
+            end
+        end
+    else
+        clearESPGroup("Twisteds")
+    end
+
+    if espStates.Generators then
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if isGeneratorObject(obj) then
+                if isGeneratorCompleted(obj) then
+                    if espHighlights[obj] then
+                        pcall(function() espHighlights[obj]:Destroy() end)
+                        espHighlights[obj] = nil
+                    end
+                else
+                    if not espHighlights[obj] then
+                        applyESP(obj, "Generators", Color3.fromRGB(66, 133, 244))
+                    end
+                end
+            end
+        end
+    else
+        clearESPGroup("Generators")
+    end
+
+    if espStates.Items then
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if isItemObject(obj) and not espHighlights[obj] then
+                applyESP(obj, "Items", Color3.fromRGB(52, 168, 83))
+            end
+        end
+    else
+        clearESPGroup("Items")
+    end
+
+    if espStates.Tapes then
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if isTapeObject(obj) and not espHighlights[obj] then
+                applyESP(obj, "Tapes", Color3.fromRGB(0, 200, 255))
+            end
+        end
+    else
+        clearESPGroup("Tapes")
+    end
+
+    if espStates.Ichor then
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if isCapsuleObject(obj) and not espHighlights[obj] then
+                applyESP(obj, "Ichor", Color3.fromRGB(251, 188, 5))
+            end
+        end
+    else
+        clearESPGroup("Ichor")
+    end
+
+    if espStates.Players then
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character and not espHighlights[player.Character] then
+                applyESP(player.Character, "Players", Color3.fromRGB(255, 140, 0))
+            end
+        end
+    else
+        clearESPGroup("Players")
+    end
+end
+
+task.spawn(function()
+    while task.wait(1.5) do
+        updateESPLogic()
+    end
+end)
+
+CreateToggle(TabESP, "Highlight Twisteds (Monsters)", false, function(state)
+    espStates.Twisteds = state
+    if not state then clearESPGroup("Twisteds") else Notify("ESP", "Twisteds ESP Enabled", 2) end
+    updateESPLogic()
+end)
+
+CreateToggle(TabESP, "Highlight Generators / Valves", false, function(state)
+    espStates.Generators = state
+    if not state then clearESPGroup("Generators") else Notify("ESP", "Generators ESP Enabled", 2) end
+    updateESPLogic()
+end)
+
+CreateToggle(TabESP, "Highlight Items (Green)", false, function(state)
+    espStates.Items = state
+    if not state then clearESPGroup("Items") else Notify("ESP", "Items ESP Enabled", 2) end
+    updateESPLogic()
+end)
+
+CreateToggle(TabESP, "Highlight Tapes (Cyan)", false, function(state)
+    espStates.Tapes = state
+    if not state then clearESPGroup("Tapes") else Notify("ESP", "Tapes ESP Enabled", 2) end
+    updateESPLogic()
+end)
+
+CreateToggle(TabESP, "Highlight Real Ichor (Capsules)", false, function(state)
+    espStates.Ichor = state
+    if not state then clearESPGroup("Ichor") else Notify("ESP", "Real Ichor ESP Enabled", 2) end
+    updateESPLogic()
+end)
+
+CreateToggle(TabESP, "Highlight Players (Orange)", false, function(state)
+    espStates.Players = state
+    if not state then clearESPGroup("Players") else Notify("ESP", "Players ESP Enabled", 2) end
+    updateESPLogic()
+end)
+
+-- ==========================================
+-- AUTO COLLECT TAB
+-- ==========================================
+CreateButton(TabAutoCollect, "auto collect Tapes", function()
+    local tapes = {}
+    local seen = {}
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        if isTapeObject(obj) then
+            local rootObj = obj:IsA("Model") and obj or (obj.Parent:IsA("Model") and isTapeObject(obj.Parent) and obj.Parent or obj)
+            if not seen[rootObj] then
+                seen[rootObj] = true
+                table.insert(tapes, rootObj)
+            end
+        end
+    end
+
+    if #tapes == 0 then
+        Notify("Tapes", "No Tape items found on the map!", 2.5)
+        return
+    end
+
+    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    Notify("Tapes", "Collecting " .. #tapes .. " Tapes...", 3)
+    task.spawn(function()
+        for _, item in ipairs(tapes) do
+            if item and item.Parent then
+                local targetPart = item:IsA("Model") and (item.PrimaryPart or item:FindFirstChildWhichIsA("BasePart")) or item
+                local currentHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                
+                if targetPart and currentHrp then
+                    currentHrp.CFrame = targetPart.CFrame * CFrame.new(0, 1, 1.5)
+                    task.wait(0.35)
+
+                    local prompt = item:FindFirstChildWhichIsA("ProximityPrompt", true)
+                    if prompt then
+                        if fastPromptEnabled then prompt.HoldDuration = 0 end
+                        prompt.RequiresLineOfSight = false
+                        if fireproximityprompt then fireproximityprompt(prompt) end
+                    end
+                    
+                    if firetouchinterest and targetPart then
+                        firetouchinterest(currentHrp, targetPart, 0)
+                        task.wait(0.05)
+                        firetouchinterest(currentHrp, targetPart, 1)
+                    end
+
+                    task.wait(0.3)
+                end
+            end
+        end
+        Notify("Tapes", "Tape Collection Finished!", 2.5)
+    end)
+end)
+
+CreateButton(TabAutoCollect, "auto collect Capsules", function()
+    local capsules = {}
+    local seen = {}
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        if isCapsuleObject(obj) then
+            local rootObj = obj:IsA("Model") and obj or (obj.Parent:IsA("Model") and isCapsuleObject(obj.Parent) and obj.Parent or obj)
+            if not seen[rootObj] then
+                seen[rootObj] = true
+                table.insert(capsules, rootObj)
+            end
+        end
+    end
+
+    if #capsules == 0 then
+        Notify("Capsules", "No Capsule / Ichor items found on the floor!", 2.5)
+        return
+    end
+
+    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    Notify("Capsules", "Collecting " .. #capsules .. " Capsules...", 3)
+    task.spawn(function()
+        for _, item in ipairs(capsules) do
+            if item and item.Parent then
+                local targetPart = item:IsA("Model") and (item.PrimaryPart or item:FindFirstChildWhichIsA("BasePart")) or item
+                local currentHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                
+                if targetPart and currentHrp then
+                    currentHrp.CFrame = targetPart.CFrame * CFrame.new(0, 1, 1.5)
+                    task.wait(0.35)
+
+                    local prompt = item:FindFirstChildWhichIsA("ProximityPrompt", true)
+                    if prompt then
+                        if fastPromptEnabled then prompt.HoldDuration = 0 end
+                        prompt.RequiresLineOfSight = false
+                        if fireproximityprompt then fireproximityprompt(prompt) end
+                    end
+                    
+                    if firetouchinterest and targetPart then
+                        firetouchinterest(currentHrp, targetPart, 0)
+                        task.wait(0.05)
+                        firetouchinterest(currentHrp, targetPart, 1)
+                    end
+
+                    task.wait(0.3)
+                end
+            end
+        end
+        Notify("Capsules", "Capsule Collection Finished!", 2.5)
+    end)
+end)
+
+-- ==========================================
+-- YOU CATEGORY & GENERAL PLAYER CONTROLS
+-- ==========================================
+local targetSpeed = 16
+local speedEnabled = false
+
+CreateSlider(TabYou, "WalkSpeed Boost", 16, 100, 24, function(val)
+    targetSpeed = val
+end)
+
+CreateToggle(TabYou, "Enable Speed Boost", false, function(state)
+    speedEnabled = state
+    Notify("Speed", state and ("Speed Boost Set to " .. targetSpeed) or "Speed Boost Disabled", 2)
+end)
+
+RunService.Stepped:Connect(function()
+    if speedEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        LocalPlayer.Character.Humanoid.WalkSpeed = targetSpeed
+    end
+end)
+
+local function setupFastPrompt(prompt)
+    if prompt:IsA("ProximityPrompt") then
+        if fastPromptEnabled then
+            if not originalHoldDurations[prompt] then
+                originalHoldDurations[prompt] = prompt.HoldDuration
+            end
+            prompt.HoldDuration = 0
+        end
+    end
+end
+
+Workspace.DescendantAdded:Connect(function(descendant)
+    if fastPromptEnabled and descendant:IsA("ProximityPrompt") then
+        setupFastPrompt(descendant)
+    end
+end)
+
+CreateToggle(TabYou, "Fast Proximity Prompt (Instant Interact)", false, function(state)
+    fastPromptEnabled = state
+    if state then
+        Notify("You", "Fast Proximity Prompt Enabled", 2)
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if obj:IsA("ProximityPrompt") then setupFastPrompt(obj) end
+        end
+    else
+        Notify("You", "Fast Proximity Prompt Disabled", 2)
+        for prompt, dur in pairs(originalHoldDurations) do
+            if prompt and prompt.Parent then prompt.HoldDuration = dur end
+        end
+        table.clear(originalHoldDurations)
+    end
+end)
+
+local autoElevatorEnabled = false
+local teleportedElevatorThisFloor = false
+
+local function checkAllGeneratorsDone()
+    local generators = getGeneratorList()
+    local totalGens = #generators
+    if totalGens == 0 then return 0, 0 end
+
+    local completedGens = 0
+    for _, gen in ipairs(generators) do
+        if isGeneratorCompleted(gen) then
+            completedGens = completedGens + 1
+        end
+    end
+
+    return totalGens, completedGens
+end
+
+local function findElevatorObject()
+    local bestElevator = nil
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        if obj:IsA("Model") or obj:IsA("BasePart") then
+            local nameLower = string.lower(obj.Name)
+            if string.find(nameLower, "elevator") or string.find(nameLower, "lift") then
+                local parentName = obj.Parent and string.lower(obj.Parent.Name) or ""
+                if not (string.find(parentName, "elevator") or string.find(parentName, "lift")) then
+                    if obj:IsA("Model") then
+                        return obj
+                    elseif not bestElevator then
+                        bestElevator = obj
+                    end
+                end
+            end
+        end
+    end
+    return bestElevator
+end
+
+local function getElevatorTargetPart(elevator)
+    if not elevator then return nil end
+    if elevator:IsA("BasePart") then return elevator end
+    
+    if elevator.PrimaryPart then return elevator.PrimaryPart end
+    
+    local preferredNames = {"floor", "base", "platform", "center", "main", "door", "spawn"}
+    for _, child in pairs(elevator:GetDescendants()) do
+        if child:IsA("BasePart") then
+            local cName = string.lower(child.Name)
+            for _, pref in ipairs(preferredNames) do
+                if string.find(cName, pref) then
+                    return child
+                end
+            end
+        end
+    end
+    
+    return elevator:FindFirstChildWhichIsA("BasePart", true)
+end
+
+task.spawn(function()
+    while task.wait(1) do
+        if autoElevatorEnabled and not teleportedElevatorThisFloor then
+            local total, completed = checkAllGeneratorsDone()
+            if total > 0 and completed == total then
+                teleportedElevatorThisFloor = true
+                Notify("Auto Elevator", "All generators finished! Waiting 4s for elevator to load...", 4)
+                
+                task.wait(4)
+
+                local elevator = findElevatorObject()
+                
+                if elevator then
+                    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    local targetPart = getElevatorTargetPart(elevator)
+                    if hrp and targetPart then
+                        hrp.CFrame = targetPart.CFrame * CFrame.new(0, 4, 0)
+                        if hrp:IsA("BasePart") then
+                            hrp.AssemblyLinearVelocity = Vector3.zero
+                        end
+                        Notify("Auto Elevator", "Teleported to elevator!", 4)
+                    else
+                        teleportedElevatorThisFloor = false
+                    end
+                else
+                    teleportedElevatorThisFloor = false
+                end
+            end
+        end
+    end
+end)
+
+Workspace.ChildAdded:Connect(function()
+    teleportedElevatorThisFloor = false
+end)
+
+CreateToggle(TabYou, "Auto Teleport to Elevator", false, function(state)
+    autoElevatorEnabled = state
+    teleportedElevatorThisFloor = false
+    Notify("You", state and "Auto Elevator Enabled" or "Auto Elevator Disabled", 2.5)
+end)
+
+local currentGenIdx = 1
+CreateButton(TabYou, "Teleport to Next Generator / Valve", function()
+    local activeGenerators = getActiveGeneratorList()
+
+    if #activeGenerators == 0 then
+        Notify("Teleport", "No active generators or valves left on the map!", 2.5)
+        return
+    end
+
+    if currentGenIdx > #activeGenerators then currentGenIdx = 1 end
+    local targetGen = activeGenerators[currentGenIdx]
+
+    local targetPart = targetGen:IsA("Model") and (targetGen.PrimaryPart or targetGen:FindFirstChildWhichIsA("BasePart")) or targetGen
+    local prompt = targetGen:FindFirstChildWhichIsA("ProximityPrompt", true)
+    if prompt and prompt.Parent and prompt.Parent:IsA("BasePart") then
+        targetPart = prompt.Parent
+    end
+
+    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    
+    if targetPart and hrp then
+        local spawnPos = targetPart.CFrame * CFrame.new(0, 2, -3.5)
+        hrp.CFrame = CFrame.lookAt(spawnPos.Position, targetPart.Position)
+        
+        Notify("Teleport", "Teleported to Generator / Valve #" .. currentGenIdx .. " / " .. #activeGenerators, 2)
+        currentGenIdx = currentGenIdx + 1
+    end
+end)
+
+-- ==========================================
+-- 4. BROOKHAVEN & ISOLATED UTILITY MODULES
+-- ==========================================
+
+-- 1. Fly (PC / Mobile Compatible)
+local flyEnabled = false
+local flySpeed = 50
+local flyConnection = nil
+local bodyVel = nil
+local bodyGyro = nil
+
+local function stopFly()
+    flyEnabled = false
+    if flyConnection then flyConnection:Disconnect() flyConnection = nil end
+    if bodyVel then bodyVel:Destroy() bodyVel = nil end
+    if bodyGyro then bodyGyro:Destroy() bodyGyro = nil end
+    
+    local char = LocalPlayer.Character
+    if char then
+        local hum = char:FindFirstChildWhichIsA("Humanoid")
+        if hum then hum.PlatformStand = false end
+    end
+end
+
+local function startFly()
+    stopFly()
+    flyEnabled = true
+
+    local char = LocalPlayer.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local hum = char:FindFirstChildWhichIsA("Humanoid")
+    if not hrp or not hum then return end
+
+    bodyVel = Instance.new("BodyVelocity")
+    bodyVel.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+    bodyVel.Velocity = Vector3.zero
+    bodyVel.Parent = hrp
+
+    bodyGyro = Instance.new("BodyGyro")
+    bodyGyro.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
+    bodyGyro.P = 10000
+    bodyGyro.CFrame = hrp.CFrame
+    bodyGyro.Parent = hrp
+
+    hum.PlatformStand = true
+
+    flyConnection = RunService.RenderStepped:Connect(function()
+        if not flyEnabled or not char or not hrp or not hrp.Parent or not hum then
+            stopFly()
+            return
+        end
+
+        hum.PlatformStand = true
+        local cam = Workspace.CurrentCamera
+        local moveDir = hum.MoveDirection
+
+        if moveDir.Magnitude > 0 then
+            local cameraCFrame = cam.CFrame
+            local forward = cameraCFrame.LookVector
+            local right = cameraCFrame.RightVector
+            local moveVector = (forward * -moveDir.Z + right * moveDir.X).Unit
+            bodyVel.Velocity = moveVector * flySpeed
+        else
+            bodyVel.Velocity = Vector3.zero
+        end
+
+        bodyGyro.CFrame = cam.CFrame
+    end)
+end
+
+CreateToggle(TabYou, "Fly (PC & Mobile)", false, function(state)
+    if state then
+        startFly()
+        Notify("Fly", "Flight Enabled (Speed: " .. flySpeed .. ")", 2)
+    else
+        stopFly()
+        Notify("Fly", "Flight Disabled", 2)
+    end
+end)
+
+CreateSlider(TabYou, "Fly Speed", 10, 200, 50, function(val)
+    flySpeed = val
+end)
+
+-- 2. Spinbot
+local spinEnabled = false
+local spinSpeed = 30
+local spinConnection = nil
+
+CreateToggle(TabYou, "Spinbot", false, function(state)
+    spinEnabled = state
+    if spinConnection then spinConnection:Disconnect() spinConnection = nil end
+
+    if spinEnabled then
+        Notify("Spinbot", "Spinbot Enabled", 2)
+        spinConnection = RunService.RenderStepped:Connect(function()
+            local char = LocalPlayer.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(spinSpeed), 0)
+            end
+        end)
+    else
+        Notify("Spinbot", "Spinbot Disabled", 2)
+    end
+end)
+
+CreateSlider(TabYou, "Spinbot Speed", 5, 100, 30, function(val)
+    spinSpeed = val
+end)
+
+-- 3. Anti-Seat (Auto Eject from Vehicles/Strollers)
+local antiSeatEnabled = false
+local antiSeatConnection = nil
+
+CreateToggle(TabYou, "Anti-Seat (Auto Eject)", false, function(state)
+    antiSeatEnabled = state
+    if antiSeatConnection then antiSeatConnection:Disconnect() antiSeatConnection = nil end
+
+    if antiSeatEnabled then
+        Notify("Anti-Seat", "Anti-Seat Enabled (Protects from vehicles/strollers)", 2.5)
+        antiSeatConnection = RunService.Stepped:Connect(function()
+            local char = LocalPlayer.Character
+            local hum = char and char:FindFirstChildWhichIsA("Humanoid")
+            if hum and hum.Sit then
+                hum.Sit = false
+                hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+            end
+        end)
+    else
+        Notify("Anti-Seat", "Anti-Seat Disabled", 2)
+    end
+end)
+
+-- 4. Super Fling (+ Anti-Seat Combo)
+local superFlingEnabled = false
+local flingConnection = nil
+
+CreateToggle(TabTroll, "Super Fling (+ Anti-Seat)", false, function(state)
+    superFlingEnabled = state
+    if flingConnection then flingConnection:Disconnect() flingConnection = nil end
+
+    if superFlingEnabled then
+        Notify("Super Fling", "Super Fling Active! Touch players to launch them.", 3)
+        flingConnection = RunService.Heartbeat:Connect(function()
+            local char = LocalPlayer.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            local hum = char and char:FindFirstChildWhichIsA("Humanoid")
+
+            if hrp and hum then
+                -- Anti-seat protection integrated with Fling
+                if hum.Sit then
+                    hum.Sit = false
+                    hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+                end
+
+                -- Rotational physical fling
+                local currentVel = hrp.AssemblyLinearVelocity
+                hrp.AssemblyAngularVelocity = Vector3.new(0, 99999, 0)
+            end
+        end)
+    else
+        local char = LocalPlayer.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            hrp.AssemblyAngularVelocity = Vector3.zero
+        end
+        Notify("Super Fling", "Super Fling Disabled", 2)
+    end
+end)
+
+CreateButton(TabTroll, "Server Hop", function()
+    Notify("Server Hop", "Finding new server...", 3)
+    pcall(function()
+        TeleportService:Teleport(game.PlaceId, LocalPlayer)
+    end)
+end)
+
+-- Window Toggle Helper
+local function toggleFunctionsWindow(show)
+    if show then
+        FunctionsWinBorder.Size = UDim2.new(0, 484, 0, 0)
+        FunctionsWinBorder.Position = UDim2.new(0.5, -242, 0.42, 0)
+        FunctionsWinBorder.Visible = true
+        
+        TweenService:Create(FunctionsWinBorder, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Size = UDim2.new(0, 484, 0, 314),
+            Position = UDim2.new(0.5, -242, 0.42, -157)
+        }):Play()
+    else
+        local tween = TweenService:Create(FunctionsWinBorder, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+            Size = UDim2.new(0, 484, 0, 0),
+            Position = UDim2.new(0.5, -242, 0.42, 0)
+        })
+        tween:Play()
+        tween.Completed:Connect(function()
+            if not FunctionsWinBorder.Visible then return end
+            FunctionsWinBorder.Visible = false
+            FunctionsWinBorder.Size = UDim2.new(0, 484, 0, 314)
+            FunctionsWinBorder.Position = UDim2.new(0.5, -242, 0.42, -157)
+        end)
+    end
+end
+
+-- ==========================================
+-- 5. ВТОРОЕ МЕНЮ (UTIL WINDOW)
+-- ==========================================
+local UtilWinBorder = Instance.new("Frame")
+UtilWinBorder.Name = "UtilWinBorder"
+UtilWinBorder.Size = UDim2.new(0, 484, 0, 314)
+UtilWinBorder.Position = UDim2.new(0.5, -242, 0.42, -157)
+UtilWinBorder.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+UtilWinBorder.BorderSizePixel = 0
+UtilWinBorder.Visible = false
+UtilWinBorder.ClipsDescendants = true
+UtilWinBorder.ZIndex = 49
+UtilWinBorder.Parent = Gui
+
+local UtilWinBorderCorner = Instance.new("UICorner")
+UtilWinBorderCorner.CornerRadius = UDim.new(0, 16)
+UtilWinBorderCorner.Parent = UtilWinBorder
+
+local UtilRGBGradient = Instance.new("UIGradient")
+UtilRGBGradient.Color = TopGradient.Color
+UtilRGBGradient.Parent = UtilWinBorder
+
+local UtilWin = Instance.new("Frame")
+UtilWin.Size = UDim2.new(1, -4, 1, -4)
+UtilWin.Position = UDim2.new(0, 2, 0, 2)
+UtilWin.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
+UtilWin.BorderSizePixel = 0
+UtilWin.ClipsDescendants = true
+UtilWin.ZIndex = 50
+UtilWin.Parent = UtilWinBorder
+
+local UtilCorner = Instance.new("UICorner")
+UtilCorner.CornerRadius = UDim.new(0, 14)
+UtilCorner.Parent = UtilWin
+
+local UtilStroke = Instance.new("UIStroke")
+UtilStroke.Thickness = 1.2
+UtilStroke.Color = Color3.fromRGB(40, 40, 50)
+UtilStroke.Parent = UtilWin
+
+local UtilHeaderIcon = Instance.new("ImageLabel")
+UtilHeaderIcon.Size = UDim2.new(0, 20, 0, 20)
+UtilHeaderIcon.Position = UDim2.new(0, 12, 0, 8)
+UtilHeaderIcon.BackgroundTransparency = 1
+UtilHeaderIcon.Image = "rbxassetid://139971833146352"
+UtilHeaderIcon.ZIndex = 51
+UtilHeaderIcon.Parent = UtilWin
+
+local UtilTitle = Instance.new("TextLabel")
+UtilTitle.Size = UDim2.new(1, -45, 0, 20)
+UtilTitle.Position = UDim2.new(0, 38, 0, 8)
+UtilTitle.BackgroundTransparency = 1
+UtilTitle.RichText = true
+UtilTitle.Text = '<font color="#FBBC05">?</font><font color="#EA4335">?</font><font color="#4285F4">?</font>'
+UtilTitle.TextSize = 14
+UtilTitle.Font = Enum.Font.GothamBold
+UtilTitle.TextXAlignment = Enum.TextXAlignment.Left
+UtilTitle.ZIndex = 51
+UtilTitle.Parent = UtilWin
+
+local UtilHeaderBarrier = Instance.new("Frame")
+UtilHeaderBarrier.Size = UDim2.new(1, -20, 0, 1)
+UtilHeaderBarrier.Position = UDim2.new(0, 10, 0, 32)
+UtilHeaderBarrier.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+UtilHeaderBarrier.BorderSizePixel = 0
+UtilHeaderBarrier.ZIndex = 51
+UtilHeaderBarrier.Parent = UtilWin
+
+local UtilBarrierGradient = Instance.new("UIGradient")
+UtilBarrierGradient.Color = TopGradient.Color
+UtilBarrierGradient.Parent = UtilHeaderBarrier
+
+local UtilContentArea = Instance.new("Frame")
+UtilContentArea.Size = UDim2.new(1, -20, 1, -44)
+UtilContentArea.Position = UDim2.new(0, 10, 0, 38)
+UtilContentArea.BackgroundTransparency = 1
+UtilContentArea.ZIndex = 52
+UtilContentArea.Parent = UtilWin
+
+local EmptyText = Instance.new("TextLabel")
+EmptyText.Size = UDim2.new(1, 0, 1, 0)
+EmptyText.BackgroundTransparency = 1
+EmptyText.Text = "We ran out of ideas what to make for this menu :("
+EmptyText.TextColor3 = Color3.fromRGB(150, 150, 165)
+EmptyText.TextSize = 13
+EmptyText.Font = Enum.Font.GothamMedium
+EmptyText.TextWrapped = true
+EmptyText.ZIndex = 53
+EmptyText.Parent = UtilContentArea
+
+RunService.RenderStepped:Connect(function()
+    UtilRGBGradient.Rotation = (UtilRGBGradient.Rotation + 1.8) % 360
+    UtilBarrierGradient.Rotation = (UtilBarrierGradient.Rotation + 2) % 360
+end)
+
+local function toggleUtilWindow(show)
+    if show then
+        UtilWinBorder.Size = UDim2.new(0, 484, 0, 0)
+        UtilWinBorder.Position = UDim2.new(0.5, -242, 0.42, 0)
+        UtilWinBorder.Visible = true
+        
+        TweenService:Create(UtilWinBorder, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Size = UDim2.new(0, 484, 0, 314),
+            Position = UDim2.new(0.5, -242, 0.42, -157)
+        }):Play()
+    else
+        local tween = TweenService:Create(UtilWinBorder, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+            Size = UDim2.new(0, 484, 0, 0),
+            Position = UDim2.new(0.5, -242, 0.42, 0)
+        })
+        tween:Play()
+        tween.Completed:Connect(function()
+            if not UtilWinBorder.Visible then return end
+            UtilWinBorder.Visible = false
+            UtilWinBorder.Size = UDim2.new(0, 484, 0, 314)
+            UtilWinBorder.Position = UDim2.new(0.5, -242, 0.42, -157)
+        end)
+    end
+end
+
+-- ==========================================
+-- 6. DOCK ПАНЕЛЬ
+-- ==========================================
+local DockBorder = Instance.new("Frame")
+DockBorder.Size = UDim2.new(0, 380, 0, 54)
+DockBorder.Position = UDim2.new(0.5, -190, 1, 100)
+DockBorder.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+DockBorder.BorderSizePixel = 0
+DockBorder.ZIndex = 10
+DockBorder.Parent = Gui
+
+local DockBorderCorner = Instance.new("UICorner")
+DockBorderCorner.CornerRadius = UDim.new(0, 16)
+DockBorderCorner.Parent = DockBorder
+
+local DockRGBGradient = Instance.new("UIGradient")
+DockRGBGradient.Color = TopGradient.Color
+DockRGBGradient.Parent = DockBorder
+
+local Dock = Instance.new("Frame")
+Dock.Size = UDim2.new(1, -5, 1, -5)
+Dock.Position = UDim2.new(0, 2.5, 0, 2.5)
+Dock.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+Dock.BorderSizePixel = 0
+Dock.ZIndex = 11
+Dock.Parent = DockBorder
+
+local DockCorner = Instance.new("UICorner")
+DockCorner.CornerRadius = UDim.new(0, 14)
+DockCorner.Parent = Dock
+
+local DockBgGradient = Instance.new("UIGradient")
+DockBgGradient.Rotation = 90
+DockBgGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0.00, Color3.fromRGB(36, 36, 42)),
+    ColorSequenceKeypoint.new(1.00, Color3.fromRGB(16, 16, 20))
+})
+DockBgGradient.Parent = Dock
+
+RunService.RenderStepped:Connect(function()
+    DockRGBGradient.Rotation = (DockRGBGradient.Rotation + 1.8) % 360
+end)
+
+local MiniStatsBorder = Instance.new("Frame")
+MiniStatsBorder.Size = UDim2.new(0, 120, 0, 24)
+MiniStatsBorder.Position = UDim2.new(0, 5, 0, -30)
+MiniStatsBorder.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+MiniStatsBorder.BorderSizePixel = 0
+MiniStatsBorder.ZIndex = 12
+MiniStatsBorder.Parent = DockBorder
+
+local MiniStatsCorner = Instance.new("UICorner")
+MiniStatsCorner.CornerRadius = UDim.new(0, 8)
+MiniStatsCorner.Parent = MiniStatsBorder
+
+local MiniStatsGradient = Instance.new("UIGradient")
+MiniStatsGradient.Color = TopGradient.Color
+MiniStatsGradient.Parent = MiniStatsBorder
+
+local MiniStatsBg = Instance.new("Frame")
+MiniStatsBg.Size = UDim2.new(1, -3, 1, -3)
+MiniStatsBg.Position = UDim2.new(0, 1.5, 0, 1.5)
+MiniStatsBg.BackgroundColor3 = Color3.fromRGB(20, 20, 26)
+MiniStatsBg.BorderSizePixel = 0
+MiniStatsBg.ZIndex = 13
+MiniStatsBg.Parent = MiniStatsBorder
+
+local MiniBgCorner = Instance.new("UICorner")
+MiniBgCorner.CornerRadius = UDim.new(0, 7)
+MiniBgCorner.Parent = MiniStatsBg
+
+local StatsText = Instance.new("TextLabel")
+StatsText.Size = UDim2.new(1, 0, 1, 0)
+StatsText.BackgroundTransparency = 1
+StatsText.Text = "FPS: 60 | Keyless"
+StatsText.TextColor3 = Color3.fromRGB(220, 220, 230)
+StatsText.TextSize = 10
+StatsText.Font = Enum.Font.GothamBold
+StatsText.ZIndex = 14
+StatsText.Parent = MiniStatsBg
+
+local fpsCount = 0
+local lastTick = tick()
+RunService.RenderStepped:Connect(function()
+    fpsCount = fpsCount + 1
+    if tick() - lastTick >= 1 then
+        StatsText.Text = "FPS: " .. tostring(fpsCount) .. " | Keyless"
+        fpsCount = 0
+        lastTick = tick()
+    end
+    MiniStatsGradient.Rotation = (MiniStatsGradient.Rotation + 2) % 360
+end)
+
+local GooglePlayBtn = Instance.new("ImageButton")
+GooglePlayBtn.Size = UDim2.new(0, 24, 0, 24)
+GooglePlayBtn.Position = UDim2.new(0.5, -35, 0.5, -12)
+GooglePlayBtn.BackgroundTransparency = 1
+GooglePlayBtn.Image = "rbxassetid://137441754744010"
+GooglePlayBtn.ZIndex = 15
+GooglePlayBtn.Parent = Dock
+
+local playRotation = 0
+local playIdleConn
+
+local function startPlayIdle()
+    if playIdleConn then playIdleConn:Disconnect() end
+    local t = 0
+    playIdleConn = RunService.RenderStepped:Connect(function(dt)
+        t = t + dt
+        local floatY = math.sin(t * 2.8) * 3
+        GooglePlayBtn.Position = UDim2.new(0.5, -35, 0.5, -12 + floatY)
+    end)
+end
+startPlayIdle()
+
+GooglePlayBtn.MouseButton1Click:Connect(function()
+    playSFX(SFX_NORMAL, 0.6)
+    playRotation = playRotation + 360
+
+    TweenService:Create(GooglePlayBtn, TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+        Rotation = playRotation
+    }):Play()
+
+    if UtilWinBorder.Visible then toggleUtilWindow(false) end
+    toggleFunctionsWindow(not FunctionsWinBorder.Visible)
+end)
+
+local UtilBtn = Instance.new("ImageButton")
+UtilBtn.Size = UDim2.new(0, 24, 0, 24)
+UtilBtn.Position = UDim2.new(0.5, 11, 0.5, -12)
+UtilBtn.BackgroundTransparency = 1
+UtilBtn.Image = "rbxassetid://139971833146352"
+UtilBtn.ZIndex = 15
+UtilBtn.Parent = Dock
+
+local utilRotation = 0
+local utilIdleConn
+
+local function startUtilIdle()
+    if utilIdleConn then utilIdleConn:Disconnect() end
+    local t = 0
+    utilIdleConn = RunService.RenderStepped:Connect(function(dt)
+        t = t + dt
+        local floatY = math.cos(t * 2.8) * 3
+        UtilBtn.Position = UDim2.new(0.5, 11, 0.5, -12 + floatY)
+    end)
+end
+startUtilIdle()
+
+UtilBtn.MouseButton1Click:Connect(function()
+    playSFX(SFX_NORMAL, 0.6)
+    utilRotation = utilRotation + 360
+
+    TweenService:Create(UtilBtn, TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+        Rotation = utilRotation
+    }):Play()
+
+    if FunctionsWinBorder.Visible then toggleFunctionsWindow(false) end
+    toggleUtilWindow(not UtilWinBorder.Visible)
+end)
+
+-- ==========================================
+-- 7. ЛОГО-КНОПКА
+-- ==========================================
+local LogoBtn = Instance.new("ImageButton")
+LogoBtn.Size = UDim2.new(0, 34, 0, 34)
+LogoBtn.Position = UDim2.new(0.5, -17, 0.93, -17)
+LogoBtn.BackgroundTransparency = 1
+LogoBtn.Image = "rbxassetid://139807262244286"
+LogoBtn.ZIndex = 25
+LogoBtn.Parent = Gui
+
+local isOpen = false
+local currentRotation = 0
+local idleConnection
+
+local LOGO_CLOSED = UDim2.new(0.5, -17, 0.93, -17)
+local LOGO_OPEN = UDim2.new(0.5, -17, 0.93, -50)
+
+local function startIdle()
+    if idleConnection then idleConnection:Disconnect() end
+    local time = 0
+    idleConnection = RunService.RenderStepped:Connect(function(dt)
+        if not isOpen then
+            time = time + dt
+            local floatY = math.sin(time * 2.5) * 4
+            local swayRot = math.cos(time * 2) * 3
+            LogoBtn.Position = UDim2.new(0.5, -17, 0.93, -17 + floatY)
+            LogoBtn.Rotation = currentRotation + swayRot
+        end
+    end)
+end
+
+startIdle()
+
+LogoBtn.MouseButton1Click:Connect(function()
+    isOpen = not isOpen
+    playSFX(SFX_NORMAL, 0.6)
+
+    if idleConnection then
+        idleConnection:Disconnect()
+        idleConnection = nil
+    end
+
+    currentRotation = currentRotation + 360
+
+    if isOpen then
+        TweenService:Create(DockBorder, TweenInfo.new(0.55, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Position = UDim2.new(0.5, -190, 0.93, -27)
+        }):Play()
+
+        TweenService:Create(LogoBtn, TweenInfo.new(0.55, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Rotation = currentRotation,
+            Position = LOGO_OPEN
+        }):Play()
+    else
+        TweenService:Create(DockBorder, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+            Position = UDim2.new(0.5, -190, 1, 100)
+        }):Play()
+
+        TweenService:Create(LogoBtn, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+            Rotation = currentRotation,
+            Position = LOGO_CLOSED
+        }):Play()
+
+        task.delay(0.45, function()
+            startIdle()
+        end)
+    end
+end)
