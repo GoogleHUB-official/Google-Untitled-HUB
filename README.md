@@ -7,8 +7,6 @@ for mobile and PC executors
 ---
 Copy and paste this single line of code into 
 your executor!:
----
+
 ```luau:
 loadstring(game:HttpGet("[https://raw.githubusercontent.com/GoogleHUB-official/Google-Untitled-HUB/main/Google%20Untitled%20HUB%20(test](https://raw.githubusercontent.com/GoogleHUB-official/Google-Untitled-HUB/main/Google%20Untitled%20HUB%20(test))"))()
----
-hope you will enjoy our created HUB have fun! :>
