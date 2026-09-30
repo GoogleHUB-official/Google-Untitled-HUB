@@ -18,4 +18,4 @@ Just copy this one line and paste it into your executor:
 hope you enjoy using mine hub have fun executors >:D
 
 ```luau
-loadstring(game:HttpGet("[https://raw.githubusercontent.com/GoogleHUB-official/Google-Untitled-HUB/main/Google%20Untitled%20HUB%20(test](https://raw.githubusercontent.com/GoogleHUB-official/Google-Untitled-HUB/main/Google%20Untitled%20HUB%20(test))"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/GoogleHUB-official/Google-Untitled-HUB/refs/heads/main/Google%20Untitled%20HUB%20(test)"))()
